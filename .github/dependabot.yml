@@ -1,0 +1,11 @@
+# Opens a pull request when a GitHub Action used in CI releases a new version,
+# so the workflow does not fall behind again.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
