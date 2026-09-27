@@ -1,0 +1,61 @@
+# Blocks
+
+Each block lists what it **owns** (its data — no one else touches it), what it **exposes** (its contract), the **events** it publishes, and the blocks it **depends on**. A block may only depend on another block's contract, never its internals.
+
+Phase column: **1** = built for the first release; **1s** = built in Phase 1 against the hardware simulator; **2** = designed now, built later.
+
+| Block | Phase | Owns | Exposes | Publishes | Depends on |
+| --- | --- | --- | --- | --- | --- |
+| **identity** | 1 | Accounts, email verification, sessions, roles, courier and staff profiles | Register, log in/out, verify email, reset password, get current user, check role | `UserRegistered`, `UserLoggedIn` | markets |
+| **markets & config** | 1 | Countries, cities, currency, VAT rates, languages, opening hours, feature flags | Get market for location, get settings, translations | `MarketSettingsChanged` | — |
+| **documents** | 1 | Uploaded files, conversion status, page count, colour detection, retention timers | Create upload URL, get document metadata, get signed print URL (station/doc-worker only) | `DocumentReady`, `DocumentRejected`, `DocumentDeleted` | doc-worker (job), S3 |
+| **pricing** | 1 | Price lists per market and station: per page (b/w, colour), duplex, copies, handling, delivery zones | Quote(print settings, fulfilment, location) → itemised price incl. VAT | `PriceListChanged` | markets |
+| **orders** | 1 | Orders, order items, print settings, the order state machine | Create order, get order, list my orders, cancel | `OrderCreated`, `OrderStateChanged` (every transition) | documents, pricing |
+| **payments** | 1 | Payment intents, captures, refunds, webhook log | Start payment for order, refund | `PaymentSucceeded`, `PaymentFailed`, `RefundIssued` | orders (read), **PaymentProvider port** → Stripe adapter |
+| **fulfilment** | 1 | Routing decisions, print jobs, locker assignments, pickup credentials | Route order, assign locker, verify pickup credential | `PrintJobDispatched`, `PrintCompleted`, `PrintFailed`, `LockerAssigned`, `PickupCredentialIssued`, `OrderCollected` | orders, stations |
+| **stations** | 1s | Stations, printers, lockers, device status, consumables, availability | List available stations near X, get station status, send command | `StationStatusChanged`, `DeviceFault`, `ConsumableLow` | station-gateway |
+| **delivery** | 1 | Riders, delivery assignments, delivery tokens, proof of delivery | Assign rider, rider's jobs, confirm collection, confirm delivery | `CourierAssigned`, `CourierCollected`, `Delivered`, `DeliveryFailed` | orders, fulfilment, **CourierProvider port** → own-riders adapter |
+| **notifications** | 1 | Templates (sv/en), delivery log, preferences | — (event-driven only) | `NotificationSent` | **EmailProvider / SmsProvider ports** |
+| **support** | 1 | Support cases, notes, resolutions | Open case, search orders, resolve, trigger reprint/refund | `SupportCaseOpened`, `SupportCaseResolved` | orders, payments, fulfilment |
+| **maintenance** | 2 | Alerts, work orders, service records | Acknowledge alert, record service, restore availability | `MaintenanceCompleted` | stations |
+| **audit** | 1 | Append-only event log with actor, timestamp, order ID | Search log (admin only) | — | all events |
+| **reporting** | 1 (basic) / 2 (full) | Read-only projections for dashboards | Revenue, volumes, fulfilment mix, utilisation, downtime, demand map | — | all events |
+
+## Ports and adapters (replaceable integrations)
+
+| Port | Phase 1 adapter | Later adapters |
+| --- | --- | --- |
+| `PaymentProvider` | Stripe (cards, Apple/Google Pay, Klarna) | Swish, MobilePay (Denmark) |
+| `CourierProvider` | Own riders (courier web app) | Budbee, Airmee, Bolt, Wolt |
+| `PrinterDriver` (in station-agent) | Simulator | IPP/IPP Everywhere printers, vendor SDKs |
+| `LockerController` (in station-agent) | Simulator | Vendor locker controllers (serial/Modbus/HTTP) |
+| `EmailProvider` | Amazon SES (eu-north-1) | — |
+| `SmsProvider` | 46elks (Swedish) | Twilio |
+| `DocumentConverter` (in doc-worker) | LibreOffice headless | — |
+
+Adding a new vendor = writing one adapter class and enabling it per market in config. No change to orders, payments logic or fulfilment.
+
+## Repository layout
+
+```
+apps/
+  web/              Next.js — customer site + /courier app (PWA)
+  admin/            Next.js — admin, support, maintenance, management
+  station-ui/       Kiosk UI served by the station agent
+services/
+  core/             NestJS modular monolith, one folder per block under src/blocks/
+  doc-worker/       Conversion, page count, virus scan (sandboxed)
+  station-gateway/  WebSocket/MQTT endpoint for station agents
+edge/
+  station-agent/    Runs on the station PC: printer + locker drivers, offline queue
+packages/
+  contracts/        Versioned DTOs, events and block interfaces (the only shared code)
+  design-tokens/    Generated from the PapperDash design system
+  i18n/             sv / en message catalogues
+  ui/               Shared React components built on the tokens
+infra/
+  terraform/        AWS: network, ECS, RDS, Redis, S3, KMS, CloudFront, Route 53
+docs/
+```
+
+Lint rules (`eslint-plugin-boundaries`) fail CI if a block imports another block's internals, so the boundaries cannot erode silently.
