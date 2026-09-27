@@ -102,6 +102,12 @@ export class OrdersService {
     return toView(row);
   }
 
+  /** For other blocks acting on behalf of the system (payments, fulfilment). Not exposed over HTTP. */
+  async getById(orderId: string): Promise<OrderView | null> {
+    const row = await this.find(orderId);
+    return row ? toView(row) : null;
+  }
+
   async history(orderId: string) {
     return this.db.select().from(orderStateHistory).where(eq(orderStateHistory.orderId, orderId)).orderBy(orderStateHistory.at);
   }

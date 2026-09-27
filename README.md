@@ -6,7 +6,7 @@ Production domain: [papperdash.se](https://www.papperdash.se) (registered at Loo
 
 ## Status
 
-**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and four blocks — **identity** (email + password, Google, Apple, QR sign-in at stations), **documents** (upload, file checks, conversion to PDF, page counting, automatic deletion), **orders** (priced orders and the controlled order state machine) and **pricing** (page-count tiers and order limits, editable by admins).
+**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and five blocks — **identity** (email + password, Google, Apple, QR sign-in at stations), **documents** (upload, file checks, conversion to PDF, page counting, automatic deletion), **orders** (priced orders and the controlled order state machine), **pricing** (page-count tiers and order limits, editable by admins) and **payments** (Stripe checkout with card, Apple Pay, Google Pay and Klarna; refunds).
 
 ## Getting started
 
@@ -49,7 +49,7 @@ pnpm dev:core                # http://localhost:4000/health
 | First release | Phase 1: online ordering + courier delivery in Lund/Malmö. Station and locker blocks are built against a hardware simulator. |
 | Stack | TypeScript end to end: Next.js, NestJS, PostgreSQL, Redis, Node station agent |
 | Hosting | AWS eu-north-1 (Stockholm), Terraform |
-| Payments | Stripe (cards, Apple/Google Pay, Klarna); Swish later as another adapter |
+| Payments | Stripe (cards, Apple/Google Pay, Klarna); Swish later as another adapter ([ADR 0007](docs/decisions/0007-payments-with-stripe.md)) |
 | Delivery | Delivery partners' apps (e.g. Wolt, Foodora, Bolt); they quote and charge the delivery fee ([ADR 0006](docs/decisions/0006-delivery-partners-and-bw-prototype.md)) |
 | Documents | PDF, JPG, PNG natively; DOCX/XLSX/PPTX converted to PDF server-side; max 50 printed pages per order, 50 MB per file |
 | Retention | Files deleted 24 h after fulfilment; unpaid uploads after 2 h |

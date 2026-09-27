@@ -5,15 +5,35 @@ import type { Money } from './orders.js';
  * selected per market in configuration (docs/decisions/0002-ports-and-adapters-for-vendors.md).
  */
 
+export interface ProviderPayment {
+  providerPaymentId: string;
+  /** For the client-side payment form (Stripe Payment Element / PaymentSheet). Never stored by PapperDash. */
+  clientSecret: string;
+  status: 'requires_action' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
+}
+
+/** A provider webhook, verified and translated into PapperDash terms. */
+export type PaymentProviderEvent =
+  | { eventId: string; kind: 'payment.succeeded'; providerPaymentId: string; amount: Money }
+  | { eventId: string; kind: 'payment.failed'; providerPaymentId: string }
+  | { eventId: string; kind: 'payment.processing'; providerPaymentId: string }
+  | { eventId: string; kind: 'refund.updated'; providerRefundId: string; status: 'pending' | 'succeeded' | 'failed' }
+  | { eventId: string; kind: 'ignored'; type: string };
+
+export class WebhookSignatureError extends Error {}
+
 export interface PaymentProvider {
   readonly id: string; // 'stripe', 'swish', ...
-  createPayment(input: { orderId: string; amount: Money; customerEmail: string; returnUrl: string; idempotencyKey: string }): Promise<{
-    providerPaymentId: string;
-    /** Where to send the customer, or a client secret for an embedded form. */
-    redirectUrl?: string;
-    clientSecret?: string;
-  }>;
-  refund(input: { providerPaymentId: string; amount: Money; idempotencyKey: string }): Promise<{ providerRefundId: string }>;
+  /** Key the client uses to render the payment form. */
+  readonly publishableKey: string;
+  createPayment(input: { orderId: string; reference: string; amount: Money; customerEmail: string; idempotencyKey: string }): Promise<ProviderPayment>;
+  /** Fetches an open payment again, e.g. when the customer returns to checkout. */
+  resumePayment(providerPaymentId: string): Promise<ProviderPayment>;
+  /** Cancels a payment that has not succeeded; returns false if it can no longer be cancelled. */
+  cancelPayment(providerPaymentId: string): Promise<boolean>;
+  refund(input: { providerPaymentId: string; amount: Money; idempotencyKey: string }): Promise<{ providerRefundId: string; status: 'pending' | 'succeeded' | 'failed' }>;
+  /** Verifies the webhook signature over the raw body; throws WebhookSignatureError if it does not match. */
+  parseWebhook(rawBody: Uint8Array, signature: string): PaymentProviderEvent;
 }
 
 /**

@@ -7,7 +7,11 @@ import type { PlatformOptions } from './platform/platform.module.js';
 
 /** Builds the HTTP app. Shared by main.ts and the end-to-end tests. */
 export async function createApp(platform: PlatformOptions): Promise<NestExpressApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(platform), { logger: ['error', 'warn', 'log'] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(platform), {
+    logger: ['error', 'warn', 'log'],
+    // Keeps the exact request bytes for payment webhook signature checks.
+    rawBody: true,
+  });
   return configureApp(app);
 }
 

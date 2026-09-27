@@ -40,7 +40,7 @@ export interface Harness {
 }
 
 /** A full core app on an in-memory Postgres (PGlite) with real migrations. Pass `oauth` to replace the Google/Apple verifier. */
-export async function startHarness(opts: { oauth?: OAuthVerifier } = {}): Promise<Harness> {
+export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Array<[unknown, unknown]> } = {}): Promise<Harness> {
   const pglite = new PGlite();
   const db = drizzle(pglite) as unknown as Db;
   await migrate(drizzle(pglite), { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) });
@@ -58,6 +58,7 @@ export async function startHarness(opts: { oauth?: OAuthVerifier } = {}): Promis
           cookieSecure: false,
           stationKeys: { [STATION.id]: STATION.key },
           oauthAudiences: { google: [], apple: [] },
+          stripe: null,
           storage: null,
           outboxPollMs: 0,
           retentionSweepMs: 0,
@@ -66,8 +67,9 @@ export async function startHarness(opts: { oauth?: OAuthVerifier } = {}): Promis
     ],
   });
   if (opts.oauth) builder = builder.overrideProvider(OAuthVerifier).useValue(opts.oauth);
+  for (const [token, value] of opts.overrides ?? []) builder = builder.overrideProvider(token as never).useValue(value);
   const moduleRef = await builder.compile();
-  const app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: false }));
+  const app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: false, rawBody: true }));
   // Listen once; letting supertest start and stop the server per request races and refuses connections.
   await app.listen(0, '127.0.0.1');
   const url = (await app.getUrl()).replace('[::1]', '127.0.0.1');

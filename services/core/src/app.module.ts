@@ -2,6 +2,7 @@ import { Controller, DynamicModule, Get, Module } from '@nestjs/common';
 import { DocumentsModule } from './blocks/documents/index.js';
 import { IdentityModule } from './blocks/identity/index.js';
 import { OrdersModule } from './blocks/orders/index.js';
+import { PaymentsModule } from './blocks/payments/index.js';
 import { PricingModule } from './blocks/pricing/index.js';
 import { PlatformModule, type PlatformOptions } from './platform/platform.module.js';
 
@@ -22,7 +23,7 @@ export class AppModule {
   static forRoot(platform: PlatformOptions): DynamicModule {
     return {
       module: AppModule,
-      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule],
+      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule, PaymentsModule],
       controllers: [HealthController],
     };
   }
