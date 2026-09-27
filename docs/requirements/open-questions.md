@@ -28,4 +28,5 @@ Implementation of a block starts only once its questions below are answered. Ans
 | 10 | Who owns the AWS account and the GitHub organisation, and who needs admin access | infra, CI/CD |
 | 11 | Company Apple Developer and Google Play developer accounts (needed to publish the apps and to issue Google/Apple sign-in client IDs) | apps/mobile, identity |
 | 12 | Malware scanning of uploads (ClamAV in the doc-worker) must be switched on before public launch; the scanner port is in place with a pass-through adapter | documents |
-| 13 | Stripe account in the company's name (needs the organisation number from question 4); Dashboard setup steps are in ADR 0007 | payments |
+| 13 | Stripe account in the company's name (needs the organisation number from question 4); go-live checklist in ADR 0007 | payments |
+| 14 | VAT registration (momsregistrering) and Stripe Tax: switch on only after the registration is recorded in Stripe (ADR 0007, Tax plan) | payments, pricing |

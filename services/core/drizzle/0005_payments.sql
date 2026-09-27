@@ -7,6 +7,8 @@ CREATE TABLE "payments"."payments" (
 	"attempt" integer NOT NULL,
 	"provider" text NOT NULL,
 	"provider_payment_id" text NOT NULL,
+	"payment_reference" text,
+	"expires_at" timestamp with time zone NOT NULL,
 	"amount_minor" integer NOT NULL,
 	"currency" text NOT NULL,
 	"status" text NOT NULL,

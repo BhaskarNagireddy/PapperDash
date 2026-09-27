@@ -21,6 +21,7 @@ import {
 } from '@papperdash/contracts';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Clock } from '../../platform/clock.js';
+import { APP_CONFIG, type AppConfig } from '../../platform/config.js';
 import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EventBus, Outbox } from '../../platform/events.js';
 import { newId } from '../../platform/ids.js';
@@ -33,6 +34,10 @@ type PaymentRow = typeof payments.$inferSelect;
 type RefundRow = typeof refunds.$inferSelect;
 
 const SYSTEM: OrderActor = { kind: 'system', block: 'payments' };
+/** Stripe's minimum Checkout Session lifetime. */
+const CHECKOUT_TTL_MS = 30 * 60 * 1000;
+/** A checkout about to expire is replaced rather than resumed, so the customer is not sent to a page that dies mid-payment. */
+const RESUME_MARGIN_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class PaymentsService implements OnModuleInit {
@@ -41,6 +46,7 @@ export class PaymentsService implements OnModuleInit {
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly clock: Clock,
     private readonly outbox: Outbox,
     private readonly bus: EventBus,
@@ -66,8 +72,8 @@ export class PaymentsService implements OnModuleInit {
   // ---------- Customer: checkout ----------
 
   /**
-   * Starts (or resumes) paying for an order at the price stored on it. Returns what the app needs to
-   * show Stripe's payment form. Calling it again while a payment is open returns the same payment.
+   * Starts (or resumes) paying for an order at the price stored on it. Returns the Stripe Checkout page to
+   * send the customer to. Calling it again while that page is still open returns the same page.
    */
   async checkout(user: CurrentUser, orderId: string): Promise<CheckoutView> {
     const provider = this.requireProvider();
@@ -81,21 +87,30 @@ export class PaymentsService implements OnModuleInit {
     if (order.state === 'Draft') order = await this.orders.awaitPayment(order.id, order.total, { kind: 'customer', userId: user.id });
 
     const latest = await this.latestPayment(order.id);
-    if (latest && OPEN_PAYMENT_STATUSES.includes(latest.status as PaymentStatus)) {
-      const resumed = await provider.resumePayment(latest.providerPaymentId);
-      if (resumed.status === 'requires_action' || resumed.status === 'processing') return this.checkoutView(latest, resumed.clientSecret, resumed.status);
-    }
     if (latest?.status === 'succeeded') throw new ConflictException({ error: 'already_paid', message: 'This order is already paid.' });
+    if (latest?.status === 'processing') {
+      throw new ConflictException({ error: 'payment_processing', message: 'Your payment is being confirmed by your bank or Klarna. You will be notified when it is done.' });
+    }
+    const now = this.clock.now();
+    if (latest?.status === 'requires_action' && latest.expiresAt.getTime() - now.getTime() > RESUME_MARGIN_MS) {
+      const resumed = await provider.resumeCheckout(latest.providerPaymentId);
+      if (resumed.status === 'requires_action') return this.checkoutView(latest, resumed.checkoutUrl, resumed.status);
+    }
 
     const attempt = (latest?.attempt ?? 0) + 1;
-    const created = await provider.createPayment({
+    const expiresAt = new Date(now.getTime() + CHECKOUT_TTL_MS);
+    const orderPage = `${this.config.publicWebUrl}/orders/${order.id}`;
+    const created = await provider.createCheckout({
       orderId: order.id,
       reference: order.reference,
       amount: order.total!,
       customerEmail: user.email,
-      idempotencyKey: `payment:${order.id}:${attempt}`,
+      idempotencyKey: `checkout:${order.id}:${attempt}`,
+      // papperdash.se links open the app through Universal Links / App Links, so both web and app return here.
+      successUrl: `${orderPage}?checkout=success`,
+      cancelUrl: `${orderPage}?checkout=cancelled`,
+      expiresAt,
     });
-    const now = this.clock.now();
     const row: PaymentRow = {
       id: newId('pay'),
       orderId: order.id,
@@ -103,6 +118,8 @@ export class PaymentsService implements OnModuleInit {
       attempt,
       provider: provider.id,
       providerPaymentId: created.providerPaymentId,
+      paymentReference: null,
+      expiresAt: created.expiresAt,
       amountMinor: order.total!.amountMinor,
       currency: order.total!.currency,
       status: created.status,
@@ -110,10 +127,10 @@ export class PaymentsService implements OnModuleInit {
       updatedAt: now,
       succeededAt: null,
     };
-    // Two simultaneous checkouts use the same idempotency key, get the same PaymentIntent, and the second insert is a no-op.
+    // Two simultaneous checkouts use the same idempotency key, get the same session, and the second insert is a no-op.
     await this.db.insert(payments).values(row).onConflictDoNothing();
     const [stored] = await this.db.select().from(payments).where(eq(payments.providerPaymentId, created.providerPaymentId));
-    return this.checkoutView(stored!, created.clientSecret, created.status);
+    return this.checkoutView(stored!, created.checkoutUrl, created.status);
   }
 
   async latestForOrder(user: CurrentUser, orderId: string): Promise<PaymentView | null> {
@@ -152,7 +169,11 @@ export class PaymentsService implements OnModuleInit {
         return;
       }
       if (event.kind === 'payment.processing') {
-        if (payment.status === 'requires_action') await tx.update(payments).set({ status: 'processing', updatedAt: this.clock.now() }).where(eq(payments.id, payment.id));
+        if (payment.status === 'requires_action') {
+          await tx.update(payments).set({ status: 'processing', paymentReference: event.paymentReference, updatedAt: this.clock.now() }).where(eq(payments.id, payment.id));
+        }
+      } else if (event.kind === 'payment.expired') {
+        if (payment.status === 'requires_action') await tx.update(payments).set({ status: 'cancelled', updatedAt: this.clock.now() }).where(eq(payments.id, payment.id));
       } else if (event.kind === 'payment.failed') {
         if (payment.status === 'succeeded') return;
         await tx.update(payments).set({ status: 'failed', updatedAt: this.clock.now() }).where(eq(payments.id, payment.id));
@@ -164,7 +185,7 @@ export class PaymentsService implements OnModuleInit {
           this.log.error(`Payment ${payment.id} received ${event.amount.amountMinor} ${event.amount.currency}, expected ${payment.amountMinor} ${payment.currency}`);
         }
         const now = this.clock.now();
-        await tx.update(payments).set({ status: 'succeeded', succeededAt: now, updatedAt: now }).where(eq(payments.id, payment.id));
+        await tx.update(payments).set({ status: 'succeeded', paymentReference: event.paymentReference, succeededAt: now, updatedAt: now }).where(eq(payments.id, payment.id));
         await this.outbox.append<PaymentEvent>(tx, {
           type: 'payments.PaymentSucceeded',
           version: 1,
@@ -226,7 +247,8 @@ export class PaymentsService implements OnModuleInit {
     await this.db.insert(refunds).values(row);
     let res;
     try {
-      res = await provider.refund({ providerPaymentId: payment.providerPaymentId, amount: { amountMinor, currency: payment.currency as Money['currency'] }, idempotencyKey: `refund:${row.id}` });
+      if (!payment.paymentReference) throw new Error('payment has no provider reference');
+      res = await provider.refund({ paymentReference: payment.paymentReference, amount: { amountMinor, currency: payment.currency as Money['currency'] }, idempotencyKey: `refund:${row.id}` });
     } catch (err) {
       // Stripe refused: record it as failed so it does not hold back the refundable amount, and tell staff.
       await this.db.update(refunds).set({ status: 'failed', updatedAt: this.clock.now() }).where(eq(refunds.id, row.id));
@@ -288,8 +310,8 @@ export class PaymentsService implements OnModuleInit {
     if (!this.provider) return;
     const open = await this.db.select().from(payments).where(and(eq(payments.orderId, orderId), inArray(payments.status, [...OPEN_PAYMENT_STATUSES])));
     for (const p of open) {
-      // If it already succeeded, the success webhook arrives next and refunds automatically.
-      if (await this.provider.cancelPayment(p.providerPaymentId)) {
+      // If it was already paid, the success webhook arrives next and refunds automatically.
+      if (await this.provider.cancelCheckout(p.providerPaymentId)) {
         await this.db.update(payments).set({ status: 'cancelled', updatedAt: this.clock.now() }).where(eq(payments.id, p.id));
       }
     }
@@ -315,15 +337,15 @@ export class PaymentsService implements OnModuleInit {
     return this.provider;
   }
 
-  private checkoutView(p: PaymentRow, clientSecret: string, status: PaymentStatus): CheckoutView {
+  private checkoutView(p: PaymentRow, checkoutUrl: string, status: PaymentStatus): CheckoutView {
     return {
       paymentId: p.id,
       orderId: p.orderId,
       status,
       amount: { amountMinor: p.amountMinor, currency: p.currency as Money['currency'] },
       provider: p.provider,
-      clientSecret,
-      publishableKey: this.provider!.publishableKey,
+      checkoutUrl,
+      expiresAt: p.expiresAt.toISOString(),
     };
   }
 

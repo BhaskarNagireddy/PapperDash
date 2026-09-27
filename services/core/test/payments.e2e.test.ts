@@ -36,13 +36,13 @@ async function customerWithOrder(email: string) {
 async function paidOrder(email: string) {
   const c = await customerWithOrder(email);
   const { body: checkout } = await h.http().post(`/v1/orders/${c.order.id}/checkout`).set(auth(c.token)).expect(200);
-  await webhook(stripe.succeed(stripe.intents.get([...stripe.intents.keys()].pop()!)!.id)).expect(200);
+  await webhook(stripe.pay(stripe.latest().id)).expect(200);
   await h.flush();
   return { ...c, checkout };
 }
 
 describe('checkout', () => {
-  it('charges the price stored on the order and returns what the payment form needs', async () => {
+  it('sends the customer to a Stripe checkout for the price stored on the order', async () => {
     const { token, order } = await customerWithOrder('pay@example.se');
     const res = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
     expect(res.body).toMatchObject({
@@ -50,14 +50,25 @@ describe('checkout', () => {
       status: 'requires_action',
       amount: { amountMinor: 1600, currency: 'SEK' },
       provider: 'stripe',
-      publishableKey: 'pk_test_fake',
-      clientSecret: expect.stringMatching(/_secret$/),
+      checkoutUrl: expect.stringMatching(/^https:\/\/checkout\.stripe\.test\//),
     });
+    // Stripe's minimum checkout lifetime is 30 minutes.
+    expect(new Date(res.body.expiresAt).getTime() - h.clock.now().getTime()).toBe(30 * 60 * 1000);
+    // After paying, Stripe returns the customer to the order page, which opens the app on phones.
+    expect(stripe.latest().successUrl).toBe(`https://papperdash.test/orders/${order.id}?checkout=success`);
     expect((await getOrder(token, order.id)).state).toBe('AwaitingPayment');
 
-    // Returning to checkout resumes the same payment instead of charging twice.
+    // Returning to checkout resumes the same page instead of opening a second one.
     const again = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
     expect(again.body.paymentId).toBe(res.body.paymentId);
+  });
+
+  it('opens a fresh checkout when the old one expired or is about to', async () => {
+    const { token, order } = await customerWithOrder('slow@example.se');
+    const first = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
+    h.clock.advance(26 * 60 * 1000);
+    const second = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
+    expect(second.body.paymentId).not.toBe(first.body.paymentId);
   });
 
   it('only the customer who owns the order can pay for it', async () => {
@@ -84,7 +95,7 @@ describe('confirmed payments', () => {
   it('moves the order from awaiting payment to paid, once, even if Stripe repeats the webhook', async () => {
     const { token, order } = await customerWithOrder('confirm@example.se');
     const { body: checkout } = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
-    const event = stripe.succeed([...stripe.intents.keys()].pop()!);
+    const event = stripe.pay(stripe.latest().id);
     await webhook(event).expect(200);
     await webhook(event).expect(200);
     await h.flush();
@@ -99,44 +110,59 @@ describe('confirmed payments', () => {
   });
 
   it('rejects webhooks with a bad signature', async () => {
-    await webhook({ eventId: 'evt_forged', kind: 'payment.succeeded', providerPaymentId: 'pi_x', amount: { amountMinor: 1, currency: 'SEK' } }, 'forged').expect(400);
+    await webhook({ eventId: 'evt_forged', kind: 'payment.succeeded', providerPaymentId: 'cs_x', paymentReference: 'pi_x', amount: { amountMinor: 1, currency: 'SEK' } }, 'forged').expect(400);
     await h.http().post('/v1/payments/webhooks/stripe').send({}).expect(400);
   });
 
-  it('lets the customer try again after a declined payment, as a new attempt', async () => {
-    const { token, order } = await customerWithOrder('declined@example.se');
+  it('waits for Klarna to confirm, then lets the customer try again if Klarna declines', async () => {
+    const { token, order } = await customerWithOrder('klarna-pay@example.se');
     const first = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
-    const pi = [...stripe.intents.keys()].pop()!;
-    await webhook({ eventId: 'evt_declined', kind: 'payment.failed', providerPaymentId: pi }).expect(200);
+    const cs = stripe.latest().id;
+    await webhook(stripe.payLater(cs)).expect(200);
     await h.flush();
     expect((await getOrder(token, order.id)).state).toBe('AwaitingPayment');
+    const busy = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(409);
+    expect(busy.body.error).toBe('payment_processing');
 
+    await webhook({ eventId: 'evt_klarna_declined', kind: 'payment.failed', providerPaymentId: cs }).expect(200);
+    await h.flush();
+    expect((await getOrder(token, order.id)).state).toBe('AwaitingPayment');
     const second = await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
     expect(second.body.paymentId).not.toBe(first.body.paymentId);
-    expect([...stripe.intents.keys()].pop()).not.toBe(pi);
+    expect(stripe.latest().id).not.toBe(cs);
   });
 
-  it('cancels the open payment when the customer cancels the order', async () => {
+  it('marks the order paid when Klarna confirms later', async () => {
+    const { token, order } = await customerWithOrder('klarna-ok@example.se');
+    await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
+    const cs = stripe.latest().id;
+    await webhook(stripe.payLater(cs)).expect(200);
+    await webhook(stripe.pay(cs)).expect(200);
+    await h.flush();
+    expect((await getOrder(token, order.id)).state).toBe('Paid');
+  });
+
+  it('closes the open checkout when the customer cancels the order', async () => {
     const { token, order } = await customerWithOrder('changed-mind@example.se');
     await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
-    const pi = [...stripe.intents.keys()].pop()!;
+    const cs = stripe.latest().id;
     await h.http().post(`/v1/orders/${order.id}/cancel`).set(auth(token)).expect(200);
     await h.flush();
-    expect(stripe.intents.get(pi)!.status).toBe('cancelled');
+    expect(stripe.sessions.get(cs)!.status).toBe('cancelled');
   });
 
   it('refunds automatically when a payment completes after the order was cancelled', async () => {
     const { token, order } = await customerWithOrder('race@example.se');
     await h.http().post(`/v1/orders/${order.id}/checkout`).set(auth(token)).expect(200);
-    const pi = [...stripe.intents.keys()].pop()!;
-    const success = stripe.succeed(pi); // the customer paid at the same moment…
+    const session = stripe.latest();
+    const success = stripe.pay(session.id); // the customer paid at the same moment…
     await h.http().post(`/v1/orders/${order.id}/cancel`).set(auth(token)).expect(200); // …as they cancelled
     await h.flush();
     await webhook(success).expect(200);
     await h.flush();
 
     expect((await getOrder(token, order.id)).state).toBe('Cancelled');
-    expect(stripe.refunds.filter((r) => r.providerPaymentId === pi)).toEqual([expect.objectContaining({ amount: { amountMinor: 1600, currency: 'SEK' } })]);
+    expect(stripe.refunds.filter((r) => r.paymentReference === session.paymentReference)).toEqual([expect.objectContaining({ amount: { amountMinor: 1600, currency: 'SEK' } })]);
   });
 });
 

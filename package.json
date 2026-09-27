@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "lint": "eslint . && node scripts/check-boundaries.mjs",
+    "lint": "eslint . && node scripts/check-boundaries.mjs && node scripts/check-secrets.mjs",
     "dev:infra": "docker compose up -d",
     "dev:core": "pnpm --filter @papperdash/core dev"
   },

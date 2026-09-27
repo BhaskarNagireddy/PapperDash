@@ -1,5 +1,5 @@
 {
-  "id": "ed7e3e6e-aa8b-46e0-a6f1-6cde640fc3d9",
+  "id": "f16d423a-0ddf-4e6f-9009-59dd50df1451",
   "prevId": "9780dd9d-c910-4b64-9234-9028c805be5b",
   "version": "7",
   "dialect": "postgresql",
@@ -1126,6 +1126,18 @@
         "provider_payment_id": {
           "name": "provider_payment_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_reference": {
+          "name": "payment_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },

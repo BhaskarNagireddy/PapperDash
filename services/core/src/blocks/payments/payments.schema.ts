@@ -11,7 +11,11 @@ export const payments = paymentsSchema.table(
     customerId: text('customer_id').notNull(),
     attempt: integer('attempt').notNull(),
     provider: text('provider').notNull(),
+    /** The provider's checkout (Stripe Checkout Session ID). */
     providerPaymentId: text('provider_payment_id').notNull().unique(),
+    /** The provider's reference for the money itself (Stripe PaymentIntent ID), known once paid; used for refunds. */
+    paymentReference: text('payment_reference'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     amountMinor: integer('amount_minor').notNull(),
     currency: text('currency').notNull(),
     status: text('status').notNull(),

@@ -11,9 +11,10 @@ export const REFUND_STATUSES = ['pending', 'succeeded', 'failed'] as const;
 export type RefundStatus = (typeof REFUND_STATUSES)[number];
 
 /**
- * What the app or website needs to show the payment form: Stripe's Payment Element (web) or
- * PaymentSheet (iOS/Android) with `clientSecret`. Card, Apple Pay, Google Pay and Klarna are offered
- * as enabled in the Stripe Dashboard.
+ * Where to send the customer to pay: Stripe Checkout, hosted by Stripe. The website redirects to
+ * `checkoutUrl`; the iOS/Android app opens it in an in-app browser. Card, Apple Pay, Google Pay and
+ * Klarna are offered as enabled in the Stripe Dashboard. Stripe returns the customer to papperdash.se,
+ * which opens the app again through Universal Links / App Links.
  */
 export interface CheckoutView {
   paymentId: string;
@@ -21,8 +22,9 @@ export interface CheckoutView {
   status: PaymentStatus;
   amount: Money;
   provider: string;
-  clientSecret: string;
-  publishableKey: string;
+  checkoutUrl: string;
+  /** The checkout page stops working after this; a new checkout makes a new one. */
+  expiresAt: string;
 }
 
 export interface PaymentView {
