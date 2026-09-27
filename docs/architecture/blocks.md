@@ -6,10 +6,10 @@ Phase column: **1** = built for the first release; **1s** = built in Phase 1 aga
 
 | Block | Phase | Owns | Exposes | Publishes | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| **identity** | 1 | Accounts, email verification, sessions, roles, courier and staff profiles | Register, log in/out, verify email, reset password, get current user, check role | `UserRegistered`, `UserLoggedIn` | markets |
+| **identity** | 1 | Accounts, email verification, sessions, roles, linked Google/Apple identities, station QR challenges | Register, email/password, Google and Apple sign-in, QR sign-in at stations, log out, reset password, current user, roles | `UserRegistered`, `UserLoggedIn` | markets |
 | **markets & config** | 1 | Countries, cities, currency, VAT rates, languages, opening hours, feature flags | Get market for location, get settings, translations | `MarketSettingsChanged` | — |
 | **documents** | 1 | Uploaded files, conversion status, page count, colour detection, retention timers | Create upload URL, get document metadata, get signed print URL (station/doc-worker only) | `DocumentReady`, `DocumentRejected`, `DocumentDeleted` | doc-worker (job), S3 |
-| **pricing** | 1 | Price lists per market and station: per page (b/w, colour), duplex, copies, handling, delivery zones | Quote(print settings, fulfilment, location) → itemised price incl. VAT | `PriceListChanged` | markets |
+| **pricing** | 1 | Append-only price lists per market: page-count tiers (b/w, colour), order page limit, upload size limit, delivery fee, VAT | Quote(pages, copies, colour, fulfilment) → itemised price incl. VAT; publish a new price list (admin) | `PriceListChanged` | markets |
 | **orders** | 1 | Orders, order items, print settings, the order state machine | Create order, get order, list my orders, cancel | `OrderCreated`, `OrderStateChanged` (every transition) | documents, pricing |
 | **payments** | 1 | Payment intents, captures, refunds, webhook log | Start payment for order, refund | `PaymentSucceeded`, `PaymentFailed`, `RefundIssued` | orders (read), **PaymentProvider port** → Stripe adapter |
 | **fulfilment** | 1 | Routing decisions, print jobs, locker assignments, pickup credentials | Route order, assign locker, verify pickup credential | `PrintJobDispatched`, `PrintCompleted`, `PrintFailed`, `LockerAssigned`, `PickupCredentialIssued`, `OrderCollected` | orders, stations |
@@ -39,6 +39,7 @@ Adding a new vendor = writing one adapter class and enabling it per market in co
 
 ```
 apps/
+  mobile/           React Native (Expo) — iOS and Android customer app
   web/              Next.js — customer site + /courier app (PWA)
   admin/            Next.js — admin, support, maintenance, management
   station-ui/       Kiosk UI served by the station agent

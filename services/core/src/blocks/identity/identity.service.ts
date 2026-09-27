@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, GoneException, Inject, Injectable, NotFoundException, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, GoneException, Inject, Injectable, NotFoundException, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
 import {
   QR_CHALLENGE_TTL_SECONDS,
   STATION_SESSION_TTL_SECONDS,
@@ -7,6 +7,8 @@ import {
   type IdentityEvent,
   type Locale,
   type LoginInput,
+  type OAuthProvider,
+  type OAuthSignInInput,
   type QrChallengeView,
   type RegisterInput,
   type Role,
@@ -18,9 +20,10 @@ import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EMAIL_PROVIDER } from '../../platform/email.js';
 import { Outbox } from '../../platform/events.js';
 import { newId, newSecret, sha256 } from '../../platform/ids.js';
-import { oneTimeTokens, qrChallenges, sessions, users } from './identity.schema.js';
+import { externalIdentities, oneTimeTokens, qrChallenges, sessions, users } from './identity.schema.js';
 import { LoginThrottle } from './login-throttle.js';
 import { authEmails } from './messages.js';
+import { OAuthTokenError, OAuthVerifier } from './oauth-verifier.js';
 import { getDummyHash, hashPassword, verifyPassword } from './password.js';
 
 const WEB_SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
@@ -43,6 +46,7 @@ export class IdentityService {
     private readonly clock: Clock,
     private readonly outbox: Outbox,
     private readonly throttle: LoginThrottle,
+    private readonly oauth: OAuthVerifier,
   ) {}
 
   // ---------- Registration and email verification ----------
@@ -92,8 +96,9 @@ export class IdentityService {
       throw new HttpException({ error: 'too_many_attempts', message: 'Too many failed attempts. Wait 15 minutes or reset your password.' }, HttpStatus.TOO_MANY_REQUESTS);
     }
     const [user] = await this.db.select().from(users).where(eq(users.email, input.email));
+    // Accounts created with Google or Apple have no password: they fail here exactly like a wrong password.
     const ok = await verifyPassword(user?.passwordHash ?? (await getDummyHash()), input.password);
-    if (!user || !ok) {
+    if (!user || !user.passwordHash || !ok) {
       this.throttle.recordFailure(throttleKey);
       throw new UnauthorizedException({ error: 'invalid_credentials', message: 'Wrong email or password. Try again or reset your password.' });
     }
@@ -104,6 +109,63 @@ export class IdentityService {
       return s;
     });
     return { user: toCurrentUser(user), session };
+  }
+
+  // ---------- Google and Apple ----------
+
+  /**
+   * Signs in with a Google or Apple ID token. Finds the account by the provider's subject ID; otherwise
+   * links to (or creates) the account with the same verified email, so every method reaches one account.
+   */
+  async signInWithProvider(provider: OAuthProvider, input: OAuthSignInInput): Promise<{ user: CurrentUser; session: IssuedSession; created: boolean }> {
+    if (!this.oauth.isEnabled(provider)) throw new NotFoundException({ error: 'provider_not_enabled', message: `${provider} sign-in is not available yet.` });
+    let identity;
+    try {
+      identity = await this.oauth.verify(provider, input.idToken);
+    } catch (err) {
+      if (err instanceof OAuthTokenError) throw new UnauthorizedException({ error: 'invalid_token', message: 'Sign-in could not be confirmed. Try again.' });
+      throw err;
+    }
+    const now = this.clock.now();
+
+    return this.db.transaction(async (tx) => {
+      let created = false;
+      const [linked] = await tx
+        .select({ user: users })
+        .from(externalIdentities)
+        .innerJoin(users, eq(users.id, externalIdentities.userId))
+        .where(and(eq(externalIdentities.provider, provider), eq(externalIdentities.subject, identity.subject)));
+      let user = linked?.user;
+
+      if (!user) {
+        if (!identity.email || !identity.emailVerified) {
+          throw new BadRequestException({ error: 'email_required', message: `Allow PapperDash to see your email address in ${provider === 'apple' ? 'Apple' : 'Google'} to sign in.` });
+        }
+        const [existing] = await tx.select().from(users).where(eq(users.email, identity.email));
+        if (existing) {
+          user = existing;
+          if (!existing.emailVerifiedAt) {
+            // Someone registered this email with a password but never proved they own it. The provider has now
+            // proved ownership, so drop that password and its sessions to prevent a pre-registration takeover.
+            [user] = await tx.update(users).set({ emailVerifiedAt: now, passwordHash: null }).where(eq(users.id, existing.id)).returning();
+            await tx.update(sessions).set({ revokedAt: now }).where(and(eq(sessions.userId, existing.id), isNull(sessions.revokedAt)));
+            await this.outbox.append<IdentityEvent>(tx, { type: 'identity.EmailVerified', version: 1, aggregateId: existing.id, payload: { userId: existing.id } });
+          }
+        } else {
+          created = true;
+          [user] = await tx
+            .insert(users)
+            .values({ id: newId('usr'), email: identity.email, passwordHash: null, locale: input.locale, emailVerifiedAt: now, createdAt: now })
+            .returning();
+          await this.outbox.append<IdentityEvent>(tx, { type: 'identity.UserRegistered', version: 1, aggregateId: user!.id, payload: { userId: user!.id, locale: input.locale } });
+        }
+        await tx.insert(externalIdentities).values({ provider, subject: identity.subject, userId: user!.id, email: identity.email, linkedAt: now });
+      }
+
+      const session = await this.issueSession(tx, user!.id, 'web', null, WEB_SESSION_TTL_MS);
+      await this.outbox.append<IdentityEvent>(tx, { type: 'identity.UserLoggedIn', version: 1, aggregateId: user!.id, payload: { userId: user!.id, method: provider } });
+      return { user: toCurrentUser(user!), session, created };
+    });
   }
 
   async logout(token: string): Promise<void> {

@@ -8,6 +8,11 @@ import type { PlatformOptions } from './platform/platform.module.js';
 /** Builds the HTTP app. Shared by main.ts and the end-to-end tests. */
 export async function createApp(platform: PlatformOptions): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(platform), { logger: ['error', 'warn', 'log'] });
+  return configureApp(app);
+}
+
+/** HTTP settings shared by production and tests. */
+export function configureApp(app: NestExpressApplication): NestExpressApplication {
   app.set('trust proxy', 1); // behind the AWS load balancer
   app.use(cookieParser());
   app.setGlobalPrefix('v1', { exclude: ['health'] });

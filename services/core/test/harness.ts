@@ -1,10 +1,13 @@
 import { PGlite } from '@electric-sql/pglite';
+import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { fileURLToPath } from 'node:url';
 import request from 'supertest';
-import { createApp } from '../src/app.js';
+import { configureApp } from '../src/app.js';
+import { AppModule } from '../src/app.module.js';
+import { OAuthVerifier } from '../src/blocks/identity/index.js';
 import { Clock } from '../src/platform/clock.js';
 import type { Db } from '../src/platform/database.js';
 import { LogEmailProvider } from '../src/platform/email.js';
@@ -30,20 +33,33 @@ export interface Harness {
   close: () => Promise<void>;
 }
 
-/** A full core app on an in-memory Postgres (PGlite) with real migrations. */
-export async function startHarness(): Promise<Harness> {
+/** A full core app on an in-memory Postgres (PGlite) with real migrations. Pass `oauth` to replace the Google/Apple verifier. */
+export async function startHarness(opts: { oauth?: OAuthVerifier } = {}): Promise<Harness> {
   const pglite = new PGlite();
   const db = drizzle(pglite) as unknown as Db;
   await migrate(drizzle(pglite), { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) });
   const clock = new FakeClock();
   const email = new LogEmailProvider();
-  const app = await createApp({
-    db,
-    clock,
-    email,
-    config: { port: 0, publicWebUrl: 'https://papperdash.test', cookieSecure: false, stationKeys: { [STATION.id]: STATION.key }, outboxPollMs: 0 },
+  let builder = Test.createTestingModule({
+    imports: [
+      AppModule.forRoot({
+        db,
+        clock,
+        email,
+        config: {
+          port: 0,
+          publicWebUrl: 'https://papperdash.test',
+          cookieSecure: false,
+          stationKeys: { [STATION.id]: STATION.key },
+          oauthAudiences: { google: [], apple: [] },
+          outboxPollMs: 0,
+        },
+      }),
+    ],
   });
-  app.useLogger(false);
+  if (opts.oauth) builder = builder.overrideProvider(OAuthVerifier).useValue(opts.oauth);
+  const moduleRef = await builder.compile();
+  const app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: false }));
   await app.init();
   return {
     app,
