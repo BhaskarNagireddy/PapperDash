@@ -67,5 +67,21 @@ export const ApproveQrChallengeInput = z.object({ token: z.string().min(20).max(
 
 export type UserRegistered = DomainEvent<'identity.UserRegistered', { userId: string; locale: Locale }>;
 export type EmailVerified = DomainEvent<'identity.EmailVerified', { userId: string }>;
-export type UserLoggedIn = DomainEvent<'identity.UserLoggedIn', { userId: string; method: 'password' | 'station-qr'; stationId?: string }>;
+// ---------- Google and Apple sign-in (mobile apps and website) ----------
+// The app obtains an ID token from Google or Apple and sends it here; the server verifies its signature,
+// issuer and audience. Every method leads to the same PapperDash account for a given verified email.
+
+export const OAUTH_PROVIDERS = ['google', 'apple'] as const;
+export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+
+export const OAuthSignInInput = z.object({
+  idToken: z.string().min(20).max(8192),
+  /** Used only when this sign-in creates the account. */
+  locale: z.enum(LOCALES).default('sv'),
+});
+export type OAuthSignInInput = z.infer<typeof OAuthSignInInput>;
+
+export type LoginMethod = 'password' | 'station-qr' | OAuthProvider;
+
+export type UserLoggedIn = DomainEvent<'identity.UserLoggedIn', { userId: string; method: LoginMethod; stationId?: string }>;
 export type IdentityEvent = UserRegistered | EmailVerified | UserLoggedIn;

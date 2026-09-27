@@ -4,7 +4,7 @@ Maps each requirement group in the *PapperDash Software Requirements* document t
 
 | Requirement group | Blocks | Phase |
 | --- | --- | --- |
-| Register with email only, log in/out, manage account, order history | identity, orders | 1 |
+| Register with email only, log in/out, manage account, order history | identity (email + password, Google, Apple), orders, apps/mobile, apps/web | 1 |
 | Secure upload, print settings, price before payment | documents, doc-worker, pricing, orders | 1 |
 | Digital payment | payments (Stripe adapter) | 1 |
 | Choose walk-up, station pickup or delivery | orders, fulfilment | 1 (delivery), 1s (pickup, walk-up) |

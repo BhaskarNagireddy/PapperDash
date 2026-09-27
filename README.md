@@ -6,7 +6,7 @@ Production domain: [papperdash.se](https://www.papperdash.se) (registered at Loo
 
 ## Status
 
-**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and two blocks — **identity** (email + password, QR sign-in at stations) and **orders** (the controlled order state machine).
+**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and three blocks — **identity** (email + password, Google, Apple, QR sign-in at stations), **orders** (the controlled order state machine) and **pricing** (page-count tiers and order limits, editable by admins).
 
 ## Getting started
 
@@ -51,9 +51,11 @@ pnpm dev:core                # http://localhost:4000/health
 | Hosting | AWS eu-north-1 (Stockholm), Terraform |
 | Payments | Stripe (cards, Apple/Google Pay, Klarna); Swish later as another adapter |
 | Delivery | Own riders using a courier web app; partner couriers later as adapters |
-| Documents | PDF, JPG, PNG natively; DOCX/XLSX/PPTX converted to PDF server-side |
+| Documents | PDF, JPG, PNG natively; DOCX/XLSX/PPTX converted to PDF server-side; max 50 printed pages per order, 50 MB per file |
 | Retention | Files deleted 24 h after fulfilment; unpaid uploads after 2 h |
 | Languages | Swedish and English from day one |
 | Design system | [PapperDash Design System](https://claude.ai/artifact/CWmFMib7Po7CbL4ujqjuqQ) (approved for now) |
 | Deployment | All blocks in one server application at launch ([ADR 0001](docs/decisions/0001-blocks-as-modular-monolith.md)) |
-| Login | Email + password (main), QR sign-in at stations (second) ([ADR 0004](docs/decisions/0004-login-methods.md)) |
+| Channels | iOS and Android apps (React Native) + website ([ADR 0005](docs/decisions/0005-mobile-apps-and-website.md)) |
+| Login | Email + password, Google, Apple; QR sign-in at stations ([ADR 0004](docs/decisions/0004-login-methods.md)) |
+| Launch prices | Per order by printed pages, VAT incl.: 1–5 → 10 kr, 6–15 → 16 kr, 16–25 → 25 kr, 26–50 → 50 kr |

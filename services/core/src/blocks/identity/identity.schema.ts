@@ -1,11 +1,12 @@
-import { index, pgSchema, text, timestamp } from 'drizzle-orm/pg-core';
+import { index, pgSchema, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const identity = pgSchema('identity');
 
 export const users = identity.table('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
+  /** Null for accounts that only sign in with Google or Apple. */
+  passwordHash: text('password_hash'),
   roles: text('roles').array().notNull().default(['customer']),
   locale: text('locale').notNull().default('sv'),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
@@ -55,3 +56,18 @@ export const qrChallenges = identity.table('qr_challenges', {
   approvedAt: timestamp('approved_at', { withTimezone: true }),
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
 });
+
+/** Google and Apple accounts linked to a PapperDash user, keyed by the provider's stable subject ID. */
+export const externalIdentities = identity.table(
+  'external_identities',
+  {
+    provider: text('provider').notNull(),
+    subject: text('subject').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    email: text('email'),
+    linkedAt: timestamp('linked_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.subject] }), index('external_identities_user_idx').on(t.userId)],
+);

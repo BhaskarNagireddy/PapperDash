@@ -1,7 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import {
   ApproveQrChallengeInput,
   LoginInput,
+  OAUTH_PROVIDERS,
+  OAuthSignInInput,
+  type OAuthProvider,
   RegisterInput,
   RequestPasswordResetInput,
   ResetPasswordInput,
@@ -39,6 +42,20 @@ export class IdentityController {
   @HttpCode(200)
   async login(@Body(new ZodPipe(LoginInput)) body: LoginInput, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const { user, session } = await this.identity.login(body, req.ip ?? 'unknown');
+    return this.startSession(res, user, session);
+  }
+
+  /** Google or Apple sign-in: the app sends the ID token it received from the provider's SDK. */
+  @Post('oauth/:provider')
+  @HttpCode(200)
+  async oauth(@Param('provider') provider: string, @Body(new ZodPipe(OAuthSignInInput)) body: OAuthSignInInput, @Res({ passthrough: true }) res: Response) {
+    if (!OAUTH_PROVIDERS.includes(provider as OAuthProvider)) throw new NotFoundException();
+    const { user, session, created } = await this.identity.signInWithProvider(provider as OAuthProvider, body);
+    return { ...this.startSession(res, user, session), created };
+  }
+
+  /** Sets the web cookie; the token is also returned for the mobile and courier apps, which send it as a Bearer token. */
+  private startSession(res: Response, user: CurrentUserT, session: { token: string; expiresAt: Date }) {
     res.cookie(SESSION_COOKIE, session.token, {
       httpOnly: true,
       secure: this.config.cookieSecure,
@@ -46,7 +63,6 @@ export class IdentityController {
       expires: session.expiresAt,
       path: '/',
     });
-    // The token is also returned for the courier app, which sends it as a Bearer token.
     return { user, token: session.token, expiresAt: session.expiresAt.toISOString() };
   }
 

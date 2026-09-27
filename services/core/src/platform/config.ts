@@ -8,6 +8,8 @@ const Env = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  GOOGLE_CLIENT_IDS: z.string().default(''),
+  APPLE_CLIENT_IDS: z.string().default(''),
   STATION_KEYS: z
     .string()
     .default('{}')
@@ -26,6 +28,8 @@ export type AppConfig = {
   publicWebUrl: string;
   cookieSecure: boolean;
   stationKeys: Record<string, string>;
+  /** Accepted ID-token audiences per sign-in provider. An empty list disables that provider. */
+  oauthAudiences: { google: string[]; apple: string[] };
   /** Poll interval for the outbox relay; 0 disables the timer (tests flush manually). */
   outboxPollMs: number;
 };
@@ -38,8 +42,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
     publicWebUrl: e.PUBLIC_WEB_URL,
     cookieSecure: e.COOKIE_SECURE,
     stationKeys: e.STATION_KEYS,
+    oauthAudiences: { google: csv(e.GOOGLE_CLIENT_IDS), apple: csv(e.APPLE_CLIENT_IDS) },
     outboxPollMs: 500,
   };
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
+
+const csv = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);

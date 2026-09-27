@@ -8,6 +8,7 @@ src/
   blocks/
     identity/      accounts, sessions, email verification, password reset, QR sign-in
     orders/        orders and the order state machine
+    pricing/       price lists, order page limit, quotes
   db/schema.ts     migration registry (all block schemas)
   app.module.ts    composition root: one line per block
 drizzle/           SQL migrations (generated: pnpm db:generate)
@@ -31,6 +32,7 @@ All routes except `/health` are under `/v1`. Errors are JSON `{ error, message }
 | POST | `/auth/register` | anyone | Create an account with email + password; sends a verification link |
 | POST | `/auth/verify-email` | anyone | Confirm the email with the link token |
 | POST | `/auth/login` | anyone | Email + password login; sets the `pd_session` cookie and returns a token |
+| POST | `/auth/oauth/google`, `/auth/oauth/apple` | anyone | Sign in with a Google or Apple ID token; creates or links the account |
 | POST | `/auth/logout` | signed in | Revoke the current session |
 | GET | `/auth/me` | signed in | The current user |
 | POST | `/auth/password-reset/request` | anyone | Send a reset link (same answer whether or not the email exists) |
@@ -43,5 +45,9 @@ All routes except `/health` are under `/v1`. Errors are JSON `{ error, message }
 | GET | `/orders/:id` | owner, support, admin | One order |
 | POST | `/orders/:id/cancel` | owner | Cancel before payment |
 | GET | `/orders/:id/history` | support, admin | Every state transition with actor and time |
+| GET | `/pricing` | anyone | Current price table and limits for a market (`?market=SE`) |
+| POST | `/pricing/quote` | anyone | Price for pages, copies, colour and fulfilment; 422 over the page limit |
+| PUT | `/admin/pricing/:market` | admin | Publish a new price list, effective immediately |
+| GET | `/admin/pricing/:market/history` | admin | All price lists, newest first |
 
 Stations authenticate with `x-station-id` and `x-station-key` headers (simulator phase; mutual TLS later).

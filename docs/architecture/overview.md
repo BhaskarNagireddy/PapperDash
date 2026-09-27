@@ -18,7 +18,8 @@ Because the block boundaries are real (separate schemas, events via an outbox, n
 
 | Deployable | Why it is separate |
 | --- | --- |
-| `apps/web` | Customer site + courier app (Next.js, SSR at the edge) |
+| `apps/mobile` | iOS and Android customer app (React Native / Expo), released through the app stores |
+| `apps/web` | Customer site + courier app (Next.js, SSR at the edge); also routes station QR links to the app or app store |
 | `apps/admin` | Admin, support, maintenance and management console; different auth posture |
 | `apps/station-ui` | Kiosk touchscreen UI running on the station |
 | `services/core` | The business blocks (modular monolith) |
@@ -31,6 +32,7 @@ Because the block boundaries are real (separate schemas, events via an outbox, n
 ```mermaid
 flowchart LR
   subgraph Surfaces
+    MOB[mobile app: iOS + Android]
     WEB[web: customer + courier]
     ADM[admin console]
     KIOSK[station-ui]
@@ -59,7 +61,7 @@ flowchart LR
   STRIPE[(Stripe)]
   S3[(S3 encrypted)]
 
-  WEB & ADM & KIOSK --> Core
+  MOB & WEB & ADM & KIOSK --> Core
   DOC --> S3
   DOC -. job .-> DW
   PAY --> STRIPE
