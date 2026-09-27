@@ -10,20 +10,21 @@ Implementation of a block starts only once its questions below are answered. Ans
 - Channels: iOS and Android apps (React Native) plus the website; a QR scan without the app goes to the app store (ADR 0005).
 - Limits: 50 printed pages per order, 50 MB per file (admin-editable).
 - Launch prices (SEK, VAT incl., per order by printed pages): 1–5: 10 kr, 6–15: 16 kr, 16–25: 25 kr, 26–50: 50 kr (admin-editable).
+- Prototype prints black and white only; delivery is priced and charged by the delivery partner's app (ADR 0006).
 - Scope: Phase 1 = online ordering + courier delivery; stations/lockers via simulator.
 - Stack: TypeScript end to end. Hosting: AWS Stockholm.
-- Payments: Stripe (cards, wallets, Klarna). Couriers: own riders with a courier web app.
+- Payments: Stripe (cards, wallets, Klarna). Couriers: delivery partners' apps (ADR 0006; replaces the earlier own-riders plan).
 - Formats: PDF, JPG, PNG + Office converted server-side. Retention: 24 h after fulfilment, 2 h for unpaid uploads.
 
 ## Still open
 
 | # | Question | Blocks it gates |
 | --- | --- | --- |
-| 3 | Colour prices (currently the same as black-and-white), the delivery fee (currently 0 kr), and whether double-sided costs less | pricing (values only — editable in admin) |
+| 3 | Colour prices and whether double-sided costs less, when colour is switched on after the prototype | pricing (values only — editable in admin) |
 | 4 | Legal entity, organisation number and VAT registration (needed for Stripe, receipts and VAT) | payments, notifications (receipts) |
-| 5 | Phase 1 delivery area and hours (Lund + Malmö? same-day? evening?) | delivery, pricing |
+| 5 | Which delivery partner to integrate first (Wolt, Foodora, Bolt, Budbee…), and the area served in Phase 1 | delivery |
 | 6 | BankID as a later third login method? | identity |
-| 8 | Rider onboarding: employees or contractors, and what ID check before a rider gets an account | delivery, identity |
 | 9 | Terms of service and privacy policy text (legal owner) | web |
 | 10 | Who owns the AWS account and the GitHub organisation, and who needs admin access | infra, CI/CD |
 | 11 | Company Apple Developer and Google Play developer accounts (needed to publish the apps and to issue Google/Apple sign-in client IDs) | apps/mobile, identity |
+| 12 | Malware scanning of uploads (ClamAV in the doc-worker) must be switched on before public launch; the scanner port is in place with a pass-through adapter | documents |

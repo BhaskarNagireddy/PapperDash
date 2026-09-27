@@ -128,6 +128,8 @@ export interface OrderView {
   customerId: string;
   documentId: string;
   settings: PrintSettings;
+  /** Pages printed from the document (after the page range), per copy. */
+  pages: number;
   fulfilment: FulfilmentMethod;
   stationId: string | null;
   state: OrderState;
@@ -142,7 +144,10 @@ export type OrderActor =
   | { kind: 'courier'; userId: string }
   | { kind: 'system'; block: string };
 
-export type OrderCreated = DomainEvent<'orders.OrderCreated', { orderId: string; customerId: string; fulfilment: FulfilmentMethod; stationId: string | null }>;
+export type OrderCreated = DomainEvent<
+  'orders.OrderCreated',
+  { orderId: string; customerId: string; fulfilment: FulfilmentMethod; stationId: string | null; documentId: string }
+>;
 export type OrderStateChanged = DomainEvent<
   'orders.OrderStateChanged',
   { orderId: string; from: OrderState; to: OrderState; actor: OrderActor; reason?: string }

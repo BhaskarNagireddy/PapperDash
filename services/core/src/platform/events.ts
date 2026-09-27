@@ -85,7 +85,11 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
         .orderBy(asc(outbox.id))
         .limit(batchSize);
       let published = 0;
+      // Events of one aggregate stay in order: after a failure, that aggregate's later events wait for the retry.
+      // Other aggregates carry on, so one failing event never blocks unrelated work.
+      const blocked = new Set<string>();
       for (const row of rows) {
+        if (blocked.has(row.aggregateId)) continue;
         const event: DomainEvent = {
           id: row.id,
           type: row.type,
@@ -118,8 +122,8 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
               : { publishedAt: this.clock.now(), attempts: sql`${outbox.attempts} + 1`, lastError: null },
           )
           .where(sql`${outbox.id} = ${row.id}`);
-        if (!failures.length) published++;
-        else break; // keep per-aggregate ordering: retry this event before moving on
+        if (failures.length) blocked.add(row.aggregateId);
+        else published++;
       }
       return published;
     } finally {

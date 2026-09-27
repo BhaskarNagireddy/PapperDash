@@ -22,6 +22,20 @@
       "when": 1790514217709,
       "tag": "0002_seed_se_price_list",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790549952461,
+      "tag": "0003_bw_only_no_delivery_fee",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790550134013,
+      "tag": "0004_documents",
+      "breakpoints": true
     }
   ]
 }

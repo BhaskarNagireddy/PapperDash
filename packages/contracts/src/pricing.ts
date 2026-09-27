@@ -36,12 +36,14 @@ export const PriceListInput = z
     /** Largest upload accepted, in megabytes. */
     maxFileMb: z.int().min(1).max(200),
     bwTiers: z.array(PriceTier).min(1).max(50),
-    colourTiers: z.array(PriceTier).min(1).max(50),
-    deliveryFeeMinor: z.int().min(0).max(100_000),
+    /** Null = colour printing is not offered in this market (the prototype prints black and white only). */
+    colourTiers: z.array(PriceTier).min(1).max(50).nullable(),
   })
   .superRefine((p, ctx) => {
     for (const key of ['bwTiers', 'colourTiers'] as const) {
-      const problem = tiersCover(p[key], p.maxPages);
+      const tiers = p[key];
+      if (!tiers) continue;
+      const problem = tiersCover(tiers, p.maxPages);
       if (problem) ctx.addIssue({ code: 'custom', path: [key], message: problem });
     }
   });
@@ -63,8 +65,12 @@ export const QuoteInput = z.object({
 });
 export type QuoteInput = z.infer<typeof QuoteInput>;
 
+/**
+ * PapperDash prices printing only. For delivery orders the delivery partner's own app quotes and
+ * charges the delivery fee to the customer; it is never part of a PapperDash quote.
+ */
 export interface QuoteLine {
-  kind: 'printing' | 'delivery';
+  kind: 'printing';
   description: string;
   amount: Money;
 }
