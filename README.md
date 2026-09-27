@@ -6,7 +6,31 @@ Production domain: [papperdash.se](https://www.papperdash.se) (registered at Loo
 
 ## Status
 
-**Phase 0 — architecture blueprint, awaiting sign-off.** No service code has been written yet. The documents below describe what will be built and how it is split into independent blocks. Review them before implementation starts.
+**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and two blocks — **identity** (email + password, QR sign-in at stations) and **orders** (the controlled order state machine).
+
+## Getting started
+
+Requires Node 22 and pnpm 10.
+
+```sh
+pnpm install
+pnpm build && pnpm test      # tests run on an in-memory Postgres, no Docker needed
+pnpm lint                    # ESLint + block-boundary check
+
+# Run the core API locally
+pnpm dev:infra               # Postgres, Redis, Mailpit via Docker Compose
+cp services/core/.env.example services/core/.env
+pnpm --filter @papperdash/core build && pnpm --filter @papperdash/core db:migrate
+pnpm dev:core                # http://localhost:4000/health
+```
+
+## Repository
+
+| Path | What |
+| --- | --- |
+| `packages/contracts` | The only shared code: DTOs, events, the order state machine, vendor ports |
+| `services/core` | The business blocks, one folder each under `src/blocks/` ([API](services/core/README.md)) |
+| `docs/` | Architecture, decisions, requirements |
 
 | Read this | For |
 | --- | --- |
@@ -30,4 +54,6 @@ Production domain: [papperdash.se](https://www.papperdash.se) (registered at Loo
 | Documents | PDF, JPG, PNG natively; DOCX/XLSX/PPTX converted to PDF server-side |
 | Retention | Files deleted 24 h after fulfilment; unpaid uploads after 2 h |
 | Languages | Swedish and English from day one |
-| Design system | [PapperDash Design System](https://claude.ai/artifact/CWmFMib7Po7CbL4ujqjuqQ) (proposal) |
+| Design system | [PapperDash Design System](https://claude.ai/artifact/CWmFMib7Po7CbL4ujqjuqQ) (approved for now) |
+| Deployment | All blocks in one server application at launch ([ADR 0001](docs/decisions/0001-blocks-as-modular-monolith.md)) |
+| Login | Email + password (main), QR sign-in at stations (second) ([ADR 0004](docs/decisions/0004-login-methods.md)) |

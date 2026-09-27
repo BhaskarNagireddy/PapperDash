@@ -1,0 +1,25 @@
+{
+  "name": "papperdash",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "eslint . && node scripts/check-boundaries.mjs",
+    "dev:infra": "docker compose up -d",
+    "dev:core": "pnpm --filter @papperdash/core dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "turbo": "^2.11.4",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.70.1"
+  }
+}

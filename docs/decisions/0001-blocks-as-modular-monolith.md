@@ -1,6 +1,6 @@
 # ADR 0001: Blocks, deployed as a modular monolith first
 
-- Status: Proposed — awaiting client sign-off
+- Status: Accepted (client approved 2026-09-27)
 - Date: 2026-09-27
 
 ## Context
