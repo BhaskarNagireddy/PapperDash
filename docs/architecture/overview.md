@@ -23,7 +23,7 @@ Because the block boundaries are real (separate schemas, events via an outbox, n
 | `apps/admin` | Admin, support, maintenance and management console; different auth posture |
 | `apps/station-ui` | Kiosk touchscreen UI running on the station |
 | `services/core` | The business blocks (modular monolith) |
-| `services/doc-worker` | CPU-heavy file conversion, page counting and virus scanning; scales independently and is sandboxed |
+| `services/doc-worker` | CPU-heavy file conversion, page counting and virus scanning; scales independently and is sandboxed. Until conversion load requires it, the same code runs inside core behind the `DocumentProcessor` port |
 | `services/station-gateway` | Long-lived connections to every station; scales with station count |
 | `edge/station-agent` | Runs on each station; drives printer and lockers; works offline |
 

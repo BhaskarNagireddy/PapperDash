@@ -16,8 +16,8 @@ export const priceLists = pricingSchema.table(
     maxPages: integer('max_pages').notNull(),
     maxFileMb: integer('max_file_mb').notNull(),
     bwTiers: jsonb('bw_tiers').notNull(),
-    colourTiers: jsonb('colour_tiers').notNull(),
-    deliveryFeeMinor: integer('delivery_fee_minor').notNull(),
+    /** Null = colour not offered. */
+    colourTiers: jsonb('colour_tiers'),
     activeFrom: timestamp('active_from', { withTimezone: true }).notNull(),
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),

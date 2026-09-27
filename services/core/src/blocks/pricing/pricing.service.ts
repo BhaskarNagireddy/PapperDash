@@ -37,7 +37,7 @@ export class PricingService {
 
   /**
    * Prices an order. The tier is chosen by printed pages (selected pages x copies) and gives the price
-   * for the whole order; delivery adds the delivery fee. All amounts include VAT.
+   * for the whole order, VAT included. Delivery is priced and charged by the delivery partner, not here.
    */
   async quote(input: QuoteInput): Promise<Quote> {
     const list = await this.active(input.market);
@@ -49,13 +49,15 @@ export class PricingService {
       );
     }
     const tiers = input.colour === 'colour' ? list.colourTiers : list.bwTiers;
+    if (!tiers) {
+      throw new HttpException({ error: 'colour_unavailable', message: 'Colour printing is not available yet. Choose black and white.' }, HttpStatus.UNPROCESSABLE_ENTITY);
+    }
     const tier = findTier(tiers, printedPages);
     const money = (amountMinor: number): Money => ({ amountMinor, currency: list.currency });
 
     const lines: QuoteLine[] = [
       { kind: 'printing', description: `${printedPages} ${printedPages === 1 ? 'page' : 'pages'}, ${input.colour === 'colour' ? 'colour' : 'black & white'}`, amount: money(tier.priceMinor) },
     ];
-    if (input.fulfilment === 'delivery' && list.deliveryFeeMinor > 0) lines.push({ kind: 'delivery', description: 'Delivery', amount: money(list.deliveryFeeMinor) });
 
     const totalMinor = lines.reduce((sum, l) => sum + l.amount.amountMinor, 0);
     // Prices include VAT: VAT = total x rate / (1 + rate).
@@ -91,8 +93,7 @@ function toView(r: Row): PriceListView {
     maxPages: r.maxPages,
     maxFileMb: r.maxFileMb,
     bwTiers: r.bwTiers as PriceTier[],
-    colourTiers: r.colourTiers as PriceTier[],
-    deliveryFeeMinor: r.deliveryFeeMinor,
+    colourTiers: (r.colourTiers as PriceTier[] | null) ?? null,
     activeFrom: r.activeFrom.toISOString(),
   };
 }

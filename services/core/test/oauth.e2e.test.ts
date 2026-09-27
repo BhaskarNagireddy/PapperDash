@@ -1,7 +1,7 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWK } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { JoseOAuthVerifier } from '../src/blocks/identity/index.js';
-import { signUp, startHarness, type Harness } from './harness.js';
+import { readyDocument, signUp, startHarness, type Harness } from './harness.js';
 
 // A stand-in for Google's and Apple's signing keys, so the real verifier runs end to end.
 let h: Harness;
@@ -47,7 +47,8 @@ describe('Google sign-in', () => {
 
   it('lets a Google-only account order straight away, but not log in with a password', async () => {
     const res = await signIn('google', await idToken({ sub: 'g-2', email: 'nopw@gmail.com', email_verified: true })).expect(200);
-    await h.http().post('/v1/orders').set('Authorization', `Bearer ${res.body.token}`).send({ documentId: 'd', fulfilment: 'delivery', settings: {} }).expect(201);
+    const documentId = await readyDocument(h, res.body.token);
+    await h.http().post('/v1/orders').set('Authorization', `Bearer ${res.body.token}`).send({ documentId, fulfilment: 'delivery', settings: {} }).expect(201);
     await h.http().post('/v1/auth/login').send({ email: 'nopw@gmail.com', password: 'anything at all' }).expect(401);
   });
 

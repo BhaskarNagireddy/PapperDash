@@ -6,7 +6,7 @@ Production domain: [papperdash.se](https://www.papperdash.se) (registered at Loo
 
 ## Status
 
-**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and three blocks — **identity** (email + password, Google, Apple, QR sign-in at stations), **orders** (the controlled order state machine) and **pricing** (page-count tiers and order limits, editable by admins).
+**Phase 1 in progress.** Architecture approved. Built so far: the monorepo, shared contracts, the platform layer (database, outbox, event bus) and four blocks — **identity** (email + password, Google, Apple, QR sign-in at stations), **documents** (upload, file checks, conversion to PDF, page counting, automatic deletion), **orders** (priced orders and the controlled order state machine) and **pricing** (page-count tiers and order limits, editable by admins).
 
 ## Getting started
 
@@ -14,11 +14,11 @@ Requires Node 22 and pnpm 10.
 
 ```sh
 pnpm install
-pnpm build && pnpm test      # tests run on an in-memory Postgres, no Docker needed
+pnpm build && pnpm test      # in-memory Postgres, no Docker needed; Word conversion tests need LibreOffice Writer
 pnpm lint                    # ESLint + block-boundary check
 
 # Run the core API locally
-pnpm dev:infra               # Postgres, Redis, Mailpit via Docker Compose
+pnpm dev:infra               # Postgres, Redis, MinIO (S3), Mailpit via Docker Compose
 cp services/core/.env.example services/core/.env
 pnpm --filter @papperdash/core build && pnpm --filter @papperdash/core db:migrate
 pnpm dev:core                # http://localhost:4000/health
@@ -50,7 +50,7 @@ pnpm dev:core                # http://localhost:4000/health
 | Stack | TypeScript end to end: Next.js, NestJS, PostgreSQL, Redis, Node station agent |
 | Hosting | AWS eu-north-1 (Stockholm), Terraform |
 | Payments | Stripe (cards, Apple/Google Pay, Klarna); Swish later as another adapter |
-| Delivery | Own riders using a courier web app; partner couriers later as adapters |
+| Delivery | Delivery partners' apps (e.g. Wolt, Foodora, Bolt); they quote and charge the delivery fee ([ADR 0006](docs/decisions/0006-delivery-partners-and-bw-prototype.md)) |
 | Documents | PDF, JPG, PNG natively; DOCX/XLSX/PPTX converted to PDF server-side; max 50 printed pages per order, 50 MB per file |
 | Retention | Files deleted 24 h after fulfilment; unpaid uploads after 2 h |
 | Languages | Swedish and English from day one |
@@ -58,4 +58,4 @@ pnpm dev:core                # http://localhost:4000/health
 | Deployment | All blocks in one server application at launch ([ADR 0001](docs/decisions/0001-blocks-as-modular-monolith.md)) |
 | Channels | iOS and Android apps (React Native) + website ([ADR 0005](docs/decisions/0005-mobile-apps-and-website.md)) |
 | Login | Email + password, Google, Apple; QR sign-in at stations ([ADR 0004](docs/decisions/0004-login-methods.md)) |
-| Launch prices | Per order by printed pages, VAT incl.: 1–5 → 10 kr, 6–15 → 16 kr, 16–25 → 25 kr, 26–50 → 50 kr |
+| Launch prices | Black and white only (prototype). Per order by printed pages, VAT incl.: 1–5 → 10 kr, 6–15 → 16 kr, 16–25 → 25 kr, 26–50 → 50 kr |

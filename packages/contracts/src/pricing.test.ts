@@ -7,11 +7,15 @@ const tiers = [
   { fromPages: 16, toPages: 25, priceMinor: 2500 },
   { fromPages: 26, toPages: 50, priceMinor: 5000 },
 ];
-const base = { currency: 'SEK', vatRateBp: 2500, maxPages: 50, maxFileMb: 50, bwTiers: tiers, colourTiers: tiers, deliveryFeeMinor: 0 };
+const base = { currency: 'SEK', vatRateBp: 2500, maxPages: 50, maxFileMb: 50, bwTiers: tiers, colourTiers: tiers };
 
 describe('PriceListInput', () => {
   it('accepts tiers that cover 1..maxPages exactly', () => {
     expect(PriceListInput.safeParse(base).success).toBe(true);
+  });
+
+  it('allows colour to be switched off', () => {
+    expect(PriceListInput.safeParse({ ...base, colourTiers: null }).success).toBe(true);
   });
 
   it('rejects gaps, overlaps and tiers that stop short of the limit', () => {

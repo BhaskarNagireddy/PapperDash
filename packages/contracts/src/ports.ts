@@ -16,8 +16,12 @@ export interface PaymentProvider {
   refund(input: { providerPaymentId: string; amount: Money; idempotencyKey: string }): Promise<{ providerRefundId: string }>;
 }
 
+/**
+ * A delivery partner's platform. The partner quotes and charges the delivery fee to the customer in its own
+ * flow; PapperDash only hands over the printed order and tracks its status.
+ */
 export interface CourierProvider {
-  readonly id: string; // 'own-riders', 'budbee', ...
+  readonly id: string; // 'wolt', 'foodora', 'budbee', ...
   requestPickup(input: { orderId: string; stationId: string; dropoff: DeliveryAddress }): Promise<{ providerJobId: string }>;
   cancel(providerJobId: string): Promise<void>;
 }

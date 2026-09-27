@@ -9,6 +9,7 @@ src/
     identity/      accounts, sessions, email verification, password reset, QR sign-in
     orders/        orders and the order state machine
     pricing/       price lists, order page limit, quotes
+    documents/     uploads, file checks, conversion to PDF, page count, retention
   db/schema.ts     migration registry (all block schemas)
   app.module.ts    composition root: one line per block
 drizzle/           SQL migrations (generated: pnpm db:generate)
@@ -40,7 +41,11 @@ All routes except `/health` are under `/v1`. Errors are JSON `{ error, message }
 | POST | `/auth/qr/challenges` | station | Create a QR code to show on the station screen |
 | GET | `/auth/qr/challenges/:id` | station | Poll; once approved, returns a one-time station session |
 | POST | `/auth/qr/approve` | signed in (phone) | Approve a scanned station QR code |
-| POST | `/orders` | verified customer | Create an order (Draft) |
+| POST | `/documents` | signed in | Register a file; returns a direct upload to storage (max 50 MB) |
+| POST | `/documents/:id/complete` | owner | Upload finished: start checks, conversion and page counting |
+| GET | `/documents`, `/documents/:id` | owner | Status (`processing`, `ready`, `rejected` with a reason), page count, deletion time |
+| DELETE | `/documents/:id` | owner | Delete now (refused while a paid order still needs it) |
+| POST | `/orders` | verified customer | Create a priced order (Draft) from a ready document |
 | GET | `/orders` | signed in | My orders |
 | GET | `/orders/:id` | owner, support, admin | One order |
 | POST | `/orders/:id/cancel` | owner | Cancel before payment |

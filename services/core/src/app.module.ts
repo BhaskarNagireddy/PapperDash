@@ -1,4 +1,5 @@
 import { Controller, DynamicModule, Get, Module } from '@nestjs/common';
+import { DocumentsModule } from './blocks/documents/index.js';
 import { IdentityModule } from './blocks/identity/index.js';
 import { OrdersModule } from './blocks/orders/index.js';
 import { PricingModule } from './blocks/pricing/index.js';
@@ -21,7 +22,7 @@ export class AppModule {
   static forRoot(platform: PlatformOptions): DynamicModule {
     return {
       module: AppModule,
-      imports: [PlatformModule.forRoot(platform), IdentityModule, OrdersModule, PricingModule],
+      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule],
       controllers: [HealthController],
     };
   }

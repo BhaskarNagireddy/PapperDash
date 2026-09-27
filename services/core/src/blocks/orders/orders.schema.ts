@@ -11,6 +11,8 @@ export const orders = ordersSchema.table(
     customerId: text('customer_id').notNull(),
     documentId: text('document_id').notNull(),
     settings: jsonb('settings').notNull(),
+    /** Pages printed per copy, after the page range is applied to the document. */
+    pages: integer('pages').notNull(),
     fulfilment: text('fulfilment').notNull(),
     stationId: text('station_id'),
     state: text('state').notNull(),

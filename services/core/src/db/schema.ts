@@ -4,3 +4,4 @@ export * from '../platform/platform.schema.js';
 export * from '../blocks/identity/identity.schema.js';
 export * from '../blocks/orders/orders.schema.js';
 export * from '../blocks/pricing/pricing.schema.js';
+export * from '../blocks/documents/documents.schema.js';

@@ -1,6 +1,7 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   canTransition,
+  selectedPages,
   type CreateOrderInput,
   type CurrentUser,
   type FulfilmentMethod,
@@ -17,6 +18,8 @@ import { Clock } from '../../platform/clock.js';
 import { DB, type Db } from '../../platform/database.js';
 import { Outbox } from '../../platform/events.js';
 import { humanCode, newId } from '../../platform/ids.js';
+import { DocumentsService } from '../documents/index.js';
+import { PricingService } from '../pricing/index.js';
 import { orderStateHistory, orders } from './orders.schema.js';
 
 type OrderRow = typeof orders.$inferSelect;
@@ -35,6 +38,8 @@ export class OrdersService {
     @Inject(DB) private readonly db: Db,
     private readonly clock: Clock,
     private readonly outbox: Outbox,
+    private readonly documents: DocumentsService,
+    private readonly pricing: PricingService,
   ) {}
 
   async create(user: CurrentUser, input: CreateOrderInput): Promise<OrderView> {
@@ -49,6 +54,12 @@ export class OrdersService {
       }
       stationId = user.stationId;
     }
+    // The file must be the customer's own and ready; the page range must exist in it; the price list must accept it.
+    const { pageCount } = await this.documents.getPrintable(user.id, input.documentId);
+    const selection = selectedPages(input.settings.pageRange, pageCount);
+    if ('error' in selection) throw new BadRequestException({ error: 'invalid_page_range', message: selection.error });
+    const pages = selection.pages.length;
+    const quote = await this.pricing.quote({ market: 'SE', pages, copies: input.settings.copies, colour: input.settings.colour, fulfilment: input.fulfilment });
     const now = this.clock.now();
     const row: OrderRow = {
       id: newId('ord'),
@@ -56,11 +67,13 @@ export class OrdersService {
       customerId: user.id,
       documentId: input.documentId,
       settings: input.settings,
+      pages,
       fulfilment: input.fulfilment,
       stationId,
       state: 'Draft',
-      totalMinor: null,
-      currency: null,
+      // The price is fixed when the order is created and shown before payment.
+      totalMinor: quote.total.amountMinor,
+      currency: quote.total.currency,
       version: 0,
       createdAt: now,
       updatedAt: now,
@@ -71,7 +84,7 @@ export class OrdersService {
         type: 'orders.OrderCreated',
         version: 1,
         aggregateId: row.id,
-        payload: { orderId: row.id, customerId: user.id, fulfilment: input.fulfilment, stationId },
+        payload: { orderId: row.id, customerId: user.id, fulfilment: input.fulfilment, stationId, documentId: input.documentId },
       });
     });
     return toView(row);
@@ -155,6 +168,7 @@ function toView(r: OrderRow): OrderView {
     customerId: r.customerId,
     documentId: r.documentId,
     settings: r.settings as PrintSettings,
+    pages: r.pages,
     fulfilment: r.fulfilment as FulfilmentMethod,
     stationId: r.stationId,
     state: r.state as OrderState,
