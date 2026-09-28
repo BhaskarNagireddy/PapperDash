@@ -10,6 +10,7 @@ src/
     orders/        orders and the order state machine
     pricing/       price lists, order page limit, quotes
     documents/     uploads, file checks, conversion to PDF, page count, retention
+    payments/      Stripe Checkout Sessions, webhooks, refunds, Stripe Tax switch
   db/schema.ts     migration registry (all block schemas)
   app.module.ts    composition root: one line per block
 drizzle/           SQL migrations (generated: pnpm db:generate)
@@ -50,6 +51,11 @@ All routes except `/health` are under `/v1`. Errors are JSON `{ error, message }
 | GET | `/orders/:id` | owner, support, admin | One order |
 | POST | `/orders/:id/cancel` | owner | Cancel before payment |
 | GET | `/orders/:id/history` | support, admin | Every state transition with actor and time |
+| POST | `/orders/:id/checkout` | owner | Start or resume payment; returns the Stripe Checkout `checkoutUrl` to send the customer to |
+| GET | `/orders/:id/payment` | owner, support, admin | Latest payment status and refunded amount |
+| POST | `/payments/webhooks/stripe` | Stripe (signed) | Payment and refund confirmations; the order becomes Paid here |
+| POST | `/admin/orders/:id/refunds` | support, admin | Refund part (`amountMinor`) or all of the payment, with a reason |
+| GET | `/admin/orders/:id/refunds` | support, admin | Refunds for an order |
 | GET | `/pricing` | anyone | Current price table and limits for a market (`?market=SE`) |
 | POST | `/pricing/quote` | anyone | Price for pages, copies, colour and fulfilment; 422 over the page limit |
 | PUT | `/admin/pricing/:market` | admin | Publish a new price list, effective immediately |

@@ -12,6 +12,12 @@ const Env = z.object({
   S3_REGION: z.string().default('eu-north-1'),
   S3_ENDPOINT: z.url().optional(),
   S3_KMS_KEY_ID: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().regex(/^(sk|rk)_/, 'Use a Stripe secret (sk_) or restricted (rk_) key').optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  STRIPE_AUTOMATIC_TAX: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   GOOGLE_CLIENT_IDS: z.string().default(''),
   APPLE_CLIENT_IDS: z.string().default(''),
   STATION_KEYS: z
@@ -34,6 +40,8 @@ export type AppConfig = {
   stationKeys: Record<string, string>;
   /** Accepted ID-token audiences per sign-in provider. An empty list disables that provider. */
   oauthAudiences: { google: string[]; apple: string[] };
+  /** Stripe keys; null switches payments off. */
+  stripe: { secretKey: string; webhookSecret: string; automaticTax: boolean } | null;
   /** Document storage; null keeps files in memory (tests and quick local runs only). */
   storage: { bucket: string; region: string; endpoint?: string; kmsKeyId?: string } | null;
   /** Poll interval for the outbox relay; 0 disables the timer (tests flush manually). */
@@ -51,6 +59,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
     cookieSecure: e.COOKIE_SECURE,
     stationKeys: e.STATION_KEYS,
     oauthAudiences: { google: csv(e.GOOGLE_CLIENT_IDS), apple: csv(e.APPLE_CLIENT_IDS) },
+    stripe:
+      e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET
+        ? { secretKey: e.STRIPE_SECRET_KEY, webhookSecret: e.STRIPE_WEBHOOK_SECRET, automaticTax: e.STRIPE_AUTOMATIC_TAX }
+        : null,
     storage: e.S3_BUCKET ? { bucket: e.S3_BUCKET, region: e.S3_REGION, endpoint: e.S3_ENDPOINT, kmsKeyId: e.S3_KMS_KEY_ID } : null,
     outboxPollMs: 500,
     retentionSweepMs: 5 * 60 * 1000,

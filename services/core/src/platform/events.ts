@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { DomainEvent } from '@papperdash/contracts';
-import { and, asc, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from './config.js';
 import { Clock } from './clock.js';
 import { DB, type Db, type DbOrTx, type Tx } from './database.js';
@@ -34,6 +34,17 @@ type Handler = (event: DomainEvent, tx: Tx) => Promise<void>;
 interface Subscription {
   consumer: string;
   handler: Handler;
+  transactional: boolean;
+}
+
+export interface SubscribeOptions {
+  /**
+   * true (default): the handler runs inside the transaction that records it as done, so it runs exactly once.
+   * Use for handlers that only write to their own tables through `tx`.
+   * false: the handler runs on its own (e.g. it calls another block that opens its own transaction, or an
+   * external API) and is recorded as done afterwards. It may run again after a crash, so it must be idempotent.
+   */
+  transactional?: boolean;
 }
 
 const MAX_ATTEMPTS = 10;
@@ -58,10 +69,10 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   /** `consumer` must be stable and unique per handler, e.g. "notifications.order-ready". */
-  subscribe<E extends DomainEvent>(type: E['type'], consumer: string, handler: (event: E, tx: Tx) => Promise<void>) {
+  subscribe<E extends DomainEvent>(type: E['type'], consumer: string, handler: (event: E, tx: Tx) => Promise<void>, opts: SubscribeOptions = {}) {
     const list = this.subs.get(type) ?? [];
     if (list.some((s) => s.consumer === consumer)) throw new Error(`Duplicate consumer ${consumer} for ${type}`);
-    list.push({ consumer, handler: handler as Handler });
+    list.push({ consumer, handler: handler as Handler, transactional: opts.transactional ?? true });
     this.subs.set(type, list);
   }
 
@@ -101,14 +112,25 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
         const failures: string[] = [];
         for (const sub of this.subs.get(row.type) ?? []) {
           try {
-            await this.db.transaction(async (tx) => {
-              const inserted = await tx
-                .insert(processedEvents)
-                .values({ consumer: sub.consumer, eventId: row.id })
-                .onConflictDoNothing()
-                .returning();
-              if (inserted.length) await sub.handler(event, tx);
-            });
+            if (sub.transactional) {
+              await this.db.transaction(async (tx) => {
+                const inserted = await tx
+                  .insert(processedEvents)
+                  .values({ consumer: sub.consumer, eventId: row.id })
+                  .onConflictDoNothing()
+                  .returning();
+                if (inserted.length) await sub.handler(event, tx);
+              });
+            } else {
+              const [done] = await this.db
+                .select()
+                .from(processedEvents)
+                .where(and(eq(processedEvents.consumer, sub.consumer), eq(processedEvents.eventId, row.id)));
+              if (!done) {
+                await sub.handler(event, this.db as unknown as Tx);
+                await this.db.insert(processedEvents).values({ consumer: sub.consumer, eventId: row.id }).onConflictDoNothing();
+              }
+            }
           } catch (err) {
             failures.push(`${sub.consumer}: ${(err as Error).message}`);
             this.log.error(`Consumer ${sub.consumer} failed on ${row.type} ${row.id}`, err as Error);

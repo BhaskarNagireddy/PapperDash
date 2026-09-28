@@ -87,6 +87,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      stripe:
+        specifier: ^22.6.2
+        version: 22.6.2(@types/node@22.20.4)
       ulid:
         specifier: ^3.0.2
         version: 3.0.2
@@ -2236,6 +2239,15 @@ packages:
     resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
     engines: {node: '>=10.0.0'}
 
+  stripe@22.6.2:
+    resolution: {integrity: sha512-PwRE2scocvXqDKPiskMa5vRJEAEkq46W69XyUYmAwrNSLr675lQnfqLwnsndAWizwgihOWw/irLmoFRo3ez7ew==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   strtok3@10.3.5:
     resolution: {integrity: sha512-ki4hZQfh5rX0QDLLkOCj+h+CVNkqmp/CMf8v8kZpkNVK6jGQooMytqzLZYUVYIZcFZ6yDB70EfD8POcFXiF5oA==}
     engines: {node: '>=18'}
@@ -4374,6 +4386,10 @@ snapshots:
   std-env@4.2.0: {}
 
   streamsearch@1.1.0: {}
+
+  stripe@22.6.2(@types/node@22.20.4):
+    optionalDependencies:
+      '@types/node': 22.20.4
 
   strtok3@10.3.5:
     dependencies:

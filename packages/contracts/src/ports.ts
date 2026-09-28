@@ -5,15 +5,51 @@ import type { Money } from './orders.js';
  * selected per market in configuration (docs/decisions/0002-ports-and-adapters-for-vendors.md).
  */
 
+export interface ProviderCheckout {
+  /** The provider's checkout ID (a Stripe Checkout Session). */
+  providerPaymentId: string;
+  checkoutUrl: string;
+  status: 'requires_action' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
+  expiresAt: Date;
+}
+
+/** A provider webhook, verified and translated into PapperDash terms. */
+export type PaymentProviderEvent =
+  | {
+      eventId: string;
+      kind: 'payment.succeeded';
+      providerPaymentId: string;
+      /** The provider's reference for the money movement (a Stripe PaymentIntent), used for refunds. */
+      paymentReference: string;
+      amount: Money;
+    }
+  | { eventId: string; kind: 'payment.failed'; providerPaymentId: string }
+  | { eventId: string; kind: 'payment.processing'; providerPaymentId: string; paymentReference: string | null }
+  | { eventId: string; kind: 'payment.expired'; providerPaymentId: string }
+  | { eventId: string; kind: 'refund.updated'; providerRefundId: string; status: 'pending' | 'succeeded' | 'failed' }
+  | { eventId: string; kind: 'ignored'; type: string };
+
+export class WebhookSignatureError extends Error {}
+
 export interface PaymentProvider {
   readonly id: string; // 'stripe', 'swish', ...
-  createPayment(input: { orderId: string; amount: Money; customerEmail: string; returnUrl: string; idempotencyKey: string }): Promise<{
-    providerPaymentId: string;
-    /** Where to send the customer, or a client secret for an embedded form. */
-    redirectUrl?: string;
-    clientSecret?: string;
-  }>;
-  refund(input: { providerPaymentId: string; amount: Money; idempotencyKey: string }): Promise<{ providerRefundId: string }>;
+  createCheckout(input: {
+    orderId: string;
+    reference: string;
+    amount: Money;
+    customerEmail: string;
+    idempotencyKey: string;
+    successUrl: string;
+    cancelUrl: string;
+    expiresAt: Date;
+  }): Promise<ProviderCheckout>;
+  /** Fetches an open checkout again, e.g. when the customer returns to pay. */
+  resumeCheckout(providerPaymentId: string): Promise<ProviderCheckout>;
+  /** Closes a checkout that has not been paid; returns false if it can no longer be closed. */
+  cancelCheckout(providerPaymentId: string): Promise<boolean>;
+  refund(input: { paymentReference: string; amount: Money; idempotencyKey: string }): Promise<{ providerRefundId: string; status: 'pending' | 'succeeded' | 'failed' }>;
+  /** Verifies the webhook signature over the raw body; throws WebhookSignatureError if it does not match. */
+  parseWebhook(rawBody: Uint8Array, signature: string): PaymentProviderEvent;
 }
 
 /**

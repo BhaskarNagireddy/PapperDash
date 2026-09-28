@@ -157,4 +157,26 @@ describe('events', () => {
     await bus.flush();
     expect(seen).toContain(ok.id);
   });
+
+  it('retries a non-transactional handler until it succeeds, then never runs it again', async () => {
+    const bus = h.app.get(EventBus);
+    await bus.flush(10_000);
+    let calls = 0;
+    const { token, user } = await signUp(h, 'external@example.se');
+    bus.subscribe<OrderCreated>(
+      'orders.OrderCreated',
+      'test.external-call',
+      async (e) => {
+        if (e.payload.customerId !== user.id) return; // the earlier test's poison event is still being retried
+        calls++;
+        if (calls === 1) throw new Error('provider timeout');
+      },
+      { transactional: false },
+    );
+    await h.http().post('/v1/orders').set('Authorization', `Bearer ${token}`).send(order(await readyDocument(h, token))).expect(201);
+    await bus.flush();
+    await bus.flush();
+    await bus.flush();
+    expect(calls).toBe(2);
+  });
 });
