@@ -163,6 +163,7 @@ describe('API responses', () => {
       expect(res.headers['x-powered-by'], route).toBeUndefined();
       expect(res.headers['x-content-type-options'], route).toBe('nosniff');
       expect(res.headers['strict-transport-security'], route).toMatch(/max-age=/);
+      expect(res.headers['content-security-policy'], route).toMatch(/default-src 'none'/);
     }
   });
 

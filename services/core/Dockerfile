@@ -19,11 +19,16 @@ RUN pnpm --filter @papperdash/contracts build \
 FROM public.ecr.aws/docker/library/node:22-bookworm-slim
 # LibreOffice (Writer, Calc, Impress, no GUI) converts Word/Excel/PowerPoint uploads to PDF; fonts keep layouts faithful.
 # tini forwards signals so ECS can stop the container gracefully during rolling deploys.
+# npm, npx and corepack are removed: the app never uses them at runtime, so they would only add attack surface
+# (the vulnerability scan flags packages bundled inside npm itself).
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends \
       libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui \
       fonts-dejavu-core fonts-liberation2 tini ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 ENV NODE_ENV=production \
     PORT=4000 \
     HOME=/tmp

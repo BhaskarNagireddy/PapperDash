@@ -112,15 +112,31 @@ jobs:
       AWS_ACCESS_KEY_ID: papperdash
       AWS_SECRET_ACCESS_KEY: papperdash-ci-secret
       AWS_REGION: eu-north-1
+      MINIO_RELEASE: RELEASE.2025-10-15T17-29-55Z
     steps:
       - uses: actions/checkout@v7
+      # MinIO is now distributed as source only, so CI builds a pinned release once and caches the binary.
+      - name: Cache MinIO build
+        id: minio-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/minio-bin
+          key: minio-${{ env.MINIO_RELEASE }}
+      - uses: actions/setup-go@v7
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        with: { go-version: '1.24', cache: false }
+      - name: Build MinIO ${{ env.MINIO_RELEASE }}
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$MINIO_RELEASE" https://github.com/minio/minio.git /tmp/minio-src
+          cd /tmp/minio-src && CGO_ENABLED=0 go build -trimpath -o ~/minio-bin/minio .
       - name: Start MinIO (S3-compatible storage)
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=$AWS_ACCESS_KEY_ID -e MINIO_ROOT_PASSWORD=$AWS_SECRET_ACCESS_KEY \
-            minio/minio:latest server /data
+          mkdir -p /tmp/minio-data
+          MINIO_ROOT_USER=$AWS_ACCESS_KEY_ID MINIO_ROOT_PASSWORD=$AWS_SECRET_ACCESS_KEY \
+            nohup ~/minio-bin/minio server /tmp/minio-data --address :9000 > /tmp/minio.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:9000/minio/health/live && exit 0; sleep 1; done
-          docker logs minio; exit 1
+          cat /tmp/minio.log; exit 1
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
@@ -179,6 +195,7 @@ jobs:
       - name: Applies migrations to PostgreSQL 16
         run: docker run --rm --network host -e DATABASE_URL papperdash-core:ci node dist/migrate.js
       - name: Boots and reports ready
+        id: boot
         run: |
           docker run -d --name core --network host -e DATABASE_URL -e NODE_ENV=development -e PORT=4000 papperdash-core:ci
           for i in $(seq 1 30); do
@@ -198,16 +215,7 @@ jobs:
             echo "::error::The image started in production mode without S3, KMS, SES and https"; cat out.txt; exit 1
           fi
           grep -q "Refusing to start in production" out.txt
-      - name: Vulnerability scan (fails on fixable critical issues)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: papperdash-core:ci
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
       - name: Vulnerability report (high, for information)
-        if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: papperdash-core:ci
@@ -215,7 +223,15 @@ jobs:
           ignore-unfixed: true
           exit-code: '0'
           format: table
+      - name: Vulnerability gate (fails on fixable critical issues)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: papperdash-core:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
           skip-setup-trivy: true
       - name: Container logs
-        if: failure()
+        if: failure() && steps.boot.outcome == 'failure'
         run: docker logs core || true

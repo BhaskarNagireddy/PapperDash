@@ -20,6 +20,9 @@ for (const file of files) {
   }
   if (text.includes('\0')) continue; // binary
   text.split('\n').forEach((line, i) => {
+    // Reviewed false positive: the patterns are fixed, linear (no nested quantifiers) and only read files in this
+    // repository, never user input, so they cannot cause a regular-expression denial of service.
+    // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
     for (const p of PATTERNS) if (p.re.test(line)) findings.push(`${file}:${i + 1}: ${p.name}`);
   });
 }
