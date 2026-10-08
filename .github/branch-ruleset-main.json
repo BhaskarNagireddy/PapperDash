@@ -1,0 +1,118 @@
+{
+  "name": "Main Branch - Mandatory Owner Approval",
+  "description": "Strict enforcement: Every merge to main requires explicit approval from BhaskarNagireddy. No admins bypass.",
+  "rules": [
+    {
+      "rule_id": "require_pull_request",
+      "type": "pull_request",
+      "enforcement": "enabled",
+      "parameters": {
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": false,
+        "require_last_push_approval": true,
+        "required_approving_review_count": 1,
+        "require_review_from_code_owners": false
+      },
+      "description": "Every commit to main must come through a pull request"
+    },
+    {
+      "rule_id": "require_status_checks",
+      "type": "status_checks",
+      "enforcement": "enabled",
+      "parameters": {
+        "required_status_checks": [
+          "typecheck",
+          "test",
+          "lint"
+        ],
+        "strict_required_status_checks_policy": true
+      },
+      "description": "All CI checks must pass: TypeScript, Tests, Linting"
+    },
+    {
+      "rule_id": "restrict_commits_to_pr_only",
+      "type": "commit_authorization",
+      "enforcement": "enabled",
+      "parameters": {
+        "require_pull_request_for_all_commits": true,
+        "bypass_pull_request_allowances": [],
+        "pull_request_bypass_actor_ids": []
+      },
+      "description": "No direct commits to main, even for admins"
+    },
+    {
+      "rule_id": "require_signed_commits",
+      "type": "commit_signature",
+      "enforcement": "enabled",
+      "parameters": {
+        "require_signed_commits": true
+      },
+      "description": "All commits must be GPG or SSH signed"
+    },
+    {
+      "rule_id": "restrict_force_push_and_delete",
+      "type": "force_push_and_delete",
+      "enforcement": "enabled",
+      "parameters": {
+        "allow_force_pushes": false,
+        "allow_deletions": false,
+        "enforce_admins": true
+      },
+      "description": "No force pushes or deletions, even for admins"
+    },
+    {
+      "rule_id": "require_up_to_date_branches",
+      "type": "update_branch",
+      "enforcement": "enabled",
+      "parameters": {
+        "require_branches_to_be_up_to_date_before_merging": true
+      },
+      "description": "Branch must be up to date before merge"
+    },
+    {
+      "rule_id": "owner_approval_required",
+      "type": "owner_approval",
+      "enforcement": "enabled",
+      "parameters": {
+        "require_owner_approval": true,
+        "owner_login": "BhaskarNagireddy",
+        "approval_message": "This change requires explicit approval from the repository owner before merge"
+      },
+      "description": "CRITICAL: Only BhaskarNagireddy can approve merges to main"
+    },
+    {
+      "rule_id": "workflow_file_protection",
+      "type": "workflow_files",
+      "enforcement": "enabled",
+      "parameters": {
+        "require_workflow_approval": true,
+        "require_pull_request": true
+      },
+      "description": "GitHub Actions workflow changes require extra scrutiny"
+    },
+    {
+      "rule_id": "dismiss_on_push",
+      "type": "dismiss_stale_reviews",
+      "enforcement": "enabled",
+      "parameters": {
+        "dismiss_stale_pull_request_approvals_when_commits_are_pushed": true
+      },
+      "description": "Reviews are stale after new commits - must re-approve"
+    },
+    {
+      "rule_id": "no_merge_method_restrictions",
+      "type": "merge_methods",
+      "enforcement": "enabled",
+      "parameters": {
+        "require_squash_merge": false,
+        "require_rebase_merge": false,
+        "allow_merge_commit": true,
+        "allow_squash_merge": true,
+        "allow_rebase_merge": true
+      },
+      "description": "Flexible merge methods, but still require PR approval"
+    }
+  ],
+  "target_branches": ["main"],
+  "enforcement_level": "maximum"
+}
