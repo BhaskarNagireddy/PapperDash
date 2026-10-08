@@ -34,6 +34,9 @@ pnpm dev:core                # http://localhost:4000/health
 
 | Read this | For |
 | --- | --- |
+| [Status and roadmap](docs/roadmap.md) | What is built, what is next, and the path to going live |
+| [Deployment](docs/architecture/deployment.md) | How papperdash.se runs on AWS (ECS Fargate, 2 zones) and stays up |
+| [Testing and quality standards](docs/engineering/testing.md) | Every check a pull request must pass, and how leaks and false positives are handled |
 | [Architecture overview](docs/architecture/overview.md) | The block map and how blocks talk to each other |
 | [Blocks](docs/architecture/blocks.md) | What each block owns, exposes and depends on |
 | [Order lifecycle](docs/architecture/order-lifecycle.md) | The controlled order state machine shared by every surface |
@@ -48,7 +51,7 @@ pnpm dev:core                # http://localhost:4000/health
 | --- | --- |
 | First release | Phase 1: online ordering + courier delivery in Lund/Malmö. Station and locker blocks are built against a hardware simulator. |
 | Stack | TypeScript end to end: Next.js, NestJS, PostgreSQL, Redis, Node station agent |
-| Hosting | AWS eu-north-1 (Stockholm), Terraform |
+| Hosting | AWS eu-north-1 (Stockholm): Docker containers on ECS Fargate across 2 availability zones, Terraform ([ADR 0008](docs/decisions/0008-hosting-on-ecs-fargate.md)) |
 | Payments | Stripe Checkout Sessions (cards, Apple/Google Pay, Klarna); Stripe Tax off until VAT registration; Swish later ([ADR 0007](docs/decisions/0007-payments-with-stripe.md)) |
 | Delivery | Delivery partners' apps (e.g. Wolt, Foodora, Bolt); they quote and charge the delivery fee ([ADR 0006](docs/decisions/0006-delivery-partners-and-bw-prototype.md)) |
 | Documents | PDF, JPG, PNG natively; DOCX/XLSX/PPTX converted to PDF server-side; max 50 printed pages per order, 50 MB per file |

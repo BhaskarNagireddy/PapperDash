@@ -1,9 +1,13 @@
 import { PGlite } from '@electric-sql/pglite';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 import request from 'supertest';
 import { configureApp } from '../src/app.js';
 import { AppModule } from '../src/app.module.js';
@@ -13,7 +17,28 @@ import { EventBus } from '../src/platform/events.js';
 import { pdfWithPages } from './fixtures.js';
 import { Clock } from '../src/platform/clock.js';
 import type { Db } from '../src/platform/database.js';
-import { LogEmailProvider } from '../src/platform/email.js';
+import type { EmailMessage, EmailProvider } from '@papperdash/contracts';
+import type { LoggerService } from '@nestjs/common';
+
+/** Records emails without logging them, like the production SES adapter (tests read links from `sent`). */
+export class RecordingEmailProvider implements EmailProvider {
+  readonly sent: EmailMessage[] = [];
+  async send(message: EmailMessage) {
+    this.sent.push(message);
+  }
+}
+
+/** Collects everything the app logs, so tests can prove secrets never reach the logs. */
+export class CapturingLogger implements LoggerService {
+  readonly lines: string[] = [];
+  private add = (...args: unknown[]) => void this.lines.push(args.map((a) => (a instanceof Error ? `${a.message}\n${a.stack}` : typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+  log = this.add;
+  error = this.add;
+  warn = this.add;
+  debug = this.add;
+  verbose = this.add;
+  fatal = this.add;
+}
 
 export class FakeClock extends Clock {
   private t = new Date('2026-10-01T09:00:00Z').getTime();
@@ -31,7 +56,7 @@ export interface Harness {
   app: NestExpressApplication;
   db: Db;
   clock: FakeClock;
-  email: LogEmailProvider;
+  email: RecordingEmailProvider;
   http: () => ReturnType<typeof request>;
   storage: InMemoryObjectStorage;
   /** Runs pending events (document processing, order tracking) as the background relay would. */
@@ -39,13 +64,48 @@ export interface Harness {
   close: () => Promise<void>;
 }
 
-/** A full core app on an in-memory Postgres (PGlite) with real migrations. Pass `oauth` to replace the Google/Apple verifier. */
-export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Array<[unknown, unknown]> } = {}): Promise<Harness> {
-  const pglite = new PGlite();
-  const db = drizzle(pglite) as unknown as Db;
-  await migrate(drizzle(pglite), { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) });
+const MIGRATIONS = fileURLToPath(new URL('../drizzle', import.meta.url));
+
+/**
+ * The database for one test file, migrated from scratch.
+ * - Default: in-memory PGlite (no Docker needed).
+ * - With TEST_DATABASE_URL (CI): a fresh database on a real PostgreSQL 16 server, dropped afterwards,
+ *   so the same tests also prove the migrations and locking on the production engine.
+ */
+async function testDatabase(): Promise<{ db: Db; close: () => Promise<void> }> {
+  const serverUrl = process.env.TEST_DATABASE_URL;
+  if (!serverUrl) {
+    const pglite = new PGlite();
+    await migrate(drizzle(pglite), { migrationsFolder: MIGRATIONS });
+    return { db: drizzle(pglite) as unknown as Db, close: () => pglite.close() };
+  }
+  const name = `pd_test_${randomBytes(6).toString('hex')}`;
+  const admin = new pg.Client({ connectionString: serverUrl });
+  await admin.connect();
+  await admin.query(`CREATE DATABASE ${name}`);
+  await admin.end();
+  const url = new URL(serverUrl);
+  url.pathname = `/${name}`;
+  const pool = new pg.Pool({ connectionString: url.toString(), max: 10 });
+  await migratePg(drizzlePg(pool), { migrationsFolder: MIGRATIONS });
+  return {
+    db: drizzlePg(pool) as unknown as Db,
+    close: async () => {
+      await pool.end();
+      const cleanup = new pg.Client({ connectionString: serverUrl });
+      await cleanup.connect();
+      await cleanup.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+      await cleanup.end();
+    },
+  };
+}
+
+/** A full core app on a freshly migrated database. Pass `oauth` to replace the Google/Apple verifier. */
+export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Array<[unknown, unknown]>; logger?: LoggerService } = {}): Promise<Harness> {
+  const database = await testDatabase();
+  const db = database.db;
   const clock = new FakeClock();
-  const email = new LogEmailProvider();
+  const email = new RecordingEmailProvider();
   let builder = Test.createTestingModule({
     imports: [
       AppModule.forRoot({
@@ -59,6 +119,7 @@ export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Ar
           stationKeys: { [STATION.id]: STATION.key },
           oauthAudiences: { google: [], apple: [] },
           stripe: null,
+          email: null,
           storage: null,
           outboxPollMs: 0,
           retentionSweepMs: 0,
@@ -69,7 +130,7 @@ export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Ar
   if (opts.oauth) builder = builder.overrideProvider(OAuthVerifier).useValue(opts.oauth);
   for (const [token, value] of opts.overrides ?? []) builder = builder.overrideProvider(token as never).useValue(value);
   const moduleRef = await builder.compile();
-  const app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: false, rawBody: true }));
+  const app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: opts.logger ?? false, rawBody: true }));
   // Listen once; letting supertest start and stop the server per request races and refuses connections.
   await app.listen(0, '127.0.0.1');
   const url = (await app.getUrl()).replace('[::1]', '127.0.0.1');
@@ -86,12 +147,12 @@ export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Ar
     },
     close: async () => {
       await app.close();
-      await pglite.close();
+      await database.close();
     },
   };
 }
 
-export function lastToken(email: LogEmailProvider, to: string): string {
+export function lastToken(email: RecordingEmailProvider, to: string): string {
   const msg = [...email.sent].reverse().find((m) => m.to === to);
   const m = msg?.text.match(/token=([A-Za-z0-9_-]+)/);
   if (!m?.[1]) throw new Error(`No token email for ${to}`);

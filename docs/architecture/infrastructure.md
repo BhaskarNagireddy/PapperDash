@@ -1,5 +1,7 @@
 # Infrastructure
 
+How requests flow, what keeps the service up, and how Docker images reach AWS: see [deployment](deployment.md) and [ADR 0008](../decisions/0008-hosting-on-ecs-fargate.md).
+
 All production data stays in **AWS eu-north-1 (Stockholm)** for GDPR. Everything is defined in Terraform under `infra/terraform`; nothing is created by hand.
 
 ## Environments
@@ -14,7 +16,7 @@ All production data stays in **AWS eu-north-1 (Stockholm)** for GDPR. Everything
 
 | Need | Service |
 | --- | --- |
-| Containers (core, doc-worker, gateway, web, admin) | ECS Fargate, one service per deployable, rolling deploys |
+| Containers (core, doc-worker, gateway, web, admin) | ECS Fargate, 2+ tasks per service across 2 AZs, rolling deploys with automatic rollback |
 | Database | RDS PostgreSQL 16, Multi-AZ in production, one schema per block, automated backups + PITR |
 | Queue / cache / rate limits | ElastiCache Redis |
 | Documents | S3 with SSE-KMS, block public access, lifecycle rule as a safety net behind the retention job |
