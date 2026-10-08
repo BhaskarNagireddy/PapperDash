@@ -77,7 +77,7 @@ Scanners sometimes flag something that is safe: a **false positive**. The rule i
 
 ## Turning on branch protection
 
-A repository admin does this once in GitHub. For a **private** repository it needs a paid plan (GitHub Pro for a personal account, or Team for an organisation); GitHub Free only protects branches in public repositories.
+A repository admin does this once in GitHub. The quickest way is to import [`.github/rulesets/protect-main.json`](../../.github/rulesets/protect-main.json): Settings → Rules → Rulesets → **New ruleset ▾ → Import a ruleset**. The steps below set up the same thing by hand. For a **private** repository it needs a paid plan (GitHub Pro for a personal account, or Team for an organisation); GitHub Free only protects branches in public repositories.
 
 1. Repository → **Settings** → **Branches** → **Add branch protection rule** (or **Rules → Rulesets → New branch ruleset**), with the branch name pattern `main`.
 2. Turn on **Require a pull request before merging**. Set the required approvals to `0` while one person develops, because GitHub never lets authors approve their own pull requests; raise it to `1` when a second developer joins. Turn on **Dismiss stale approvals when new commits are pushed**.
