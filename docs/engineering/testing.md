@@ -52,6 +52,14 @@ The test and coverage reports are also kept as a downloadable **artifact** for 3
 5. **In what we depend on:** `pnpm audit` checks the npm packages and Trivy checks the container's operating system packages. Dependabot proposes updates weekly.
 6. **At runtime:** production refuses to start without encrypted storage, real email sending and https, so a missing setting can't quietly leak data.
 
+## Credentials in CI
+
+`ci.yml` contains **no real credentials**.
+- **Test databases:** the PostgreSQL test databases use the fixed password `postgres`. They exist only on the GitHub runner for one job, can't be reached from outside it, and are deleted afterwards.
+- **MinIO login:** generated randomly on every run and masked in the logs.
+- **Real secrets:** Stripe keys, AWS keys and webhook secrets never appear in the repository. In GitHub Actions they would come from encrypted repository secrets; in AWS, from Secrets Manager.
+- **History check:** Gitleaks scans the whole git history on every pull request.
+
 ## Warnings and false positives
 
 Scanners sometimes flag something that is safe: a **false positive**. The rule is the same for every tool. **Never switch the check off.** Record a narrow exception, with the reason, in the pull request where a reviewer can see it. Anything not covered by the exception keeps failing.
