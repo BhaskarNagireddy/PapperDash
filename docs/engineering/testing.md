@@ -60,7 +60,7 @@ Scanners sometimes flag something that is safe: a **false positive**. The rule i
 | --- | --- |
 | Data-exposure tests | Add an entry to `ALLOWED` in `test/data-exposure.e2e.test.ts`: the route, the exact field, and why it is safe. An exception that no longer matches anything fails the test, so stale ones get removed. Example in the code: the S3 upload form must contain the file's storage key. |
 | Gitleaks | Add the finding's fingerprint to `.gitleaksignore`, with a comment saying why. If a real secret was ever committed, roll it first; rewriting history doesn't make it safe. |
-| Semgrep | `// nosemgrep: <rule-id> -- <reason>` on the exact line. |
+| Semgrep | `// nosemgrep: <rule-id>` on (or directly above) the exact line, with the reason in a comment. Rules that only *confirm* good practice (njsscan's `good_*` rules, e.g. "CSP header is present") are excluded by exact rule ID in `ci.yml`. |
 | pnpm audit | Upgrade first. If no fix exists and the vulnerable code path is unused, add the advisory to `pnpm.auditConfig.ignoreGhsas` in `package.json`, with the reason and a review date in the PR. |
 | Trivy | Add the CVE to `.trivyignore`, with the reason and an expiry date. |
 | Coverage drop | Add tests. The minimum is not lowered. |

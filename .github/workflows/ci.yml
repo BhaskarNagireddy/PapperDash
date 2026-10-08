@@ -164,8 +164,12 @@ jobs:
       - name: Security bugs in the code (Semgrep)
         run: |
           python3 -m pip install --quiet semgrep
+          # The two excluded rules are njsscan's "good practice detected" confirmations (the CSP and X-Powered-By
+          # protections are present), not problems; every other rule blocks the merge.
           semgrep scan --metrics=off --error \
             --config p/typescript --config p/nodejsscan --config p/jwt --config p/secrets \
+            --exclude-rule ajinabraham.njsscan.good.good_helmet_checks.helmet_header_check_csp \
+            --exclude-rule ajinabraham.njsscan.good.good_helmet_checks.helmet_header_x_powered_by \
             services packages scripts
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
