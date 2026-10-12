@@ -53,3 +53,13 @@ Seen once in 5 full runs. It passed every time when run on its own.
 - **So the bug is not specific to one machine.** It shows up on GitHub's runners too, and a re-run of an old commit can still fail on it.
 - **The fix is in 69aa07a.** The PR head, 929d25f, passed all 6 checks.
 - **Rule:** when re-running a failed job, check that its commit is the PR's latest. Re-running an old commit only re-tests code that has already been replaced.
+
+## Stress comparison: old code against fixed code
+Because the bug depends on timing, both commits were run under the same deliberate load: `test/hardening.e2e.test.ts` 20 times against PostgreSQL 16, with 4 busy processes keeping all 4 CPU cores at 100 %, so the background timers and the test compete for CPU.
+
+| Commit | Passed | Failed | Errors seen |
+| --- | --- | --- | --- |
+| 368c769 (before the fixes) | 6 | **14** | `Document not ready` (10×, this incident) and `Cannot use a pool after calling end` (4×, incident 002) |
+| 531f4ea (with the fixes) | **20** | 0 | none |
+
+CI cannot be re-run from the assistant's session (GitHub API 403), so this local comparison stands in for repeated CI runs.
