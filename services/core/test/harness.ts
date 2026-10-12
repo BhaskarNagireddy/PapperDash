@@ -17,6 +17,7 @@ import { EventBus } from '../src/platform/events.js';
 import { pdfWithPages } from './fixtures.js';
 import { Clock } from '../src/platform/clock.js';
 import { DEFAULT_RATE_LIMITS, type AppConfig } from '../src/platform/config.js';
+import { createPool } from '../src/platform/pool.js';
 import type { Db } from '../src/platform/database.js';
 import type { EmailMessage, EmailProvider } from '@papperdash/contracts';
 import type { LoggerService } from '@nestjs/common';
@@ -87,7 +88,8 @@ async function testDatabase(): Promise<{ db: Db; close: () => Promise<void> }> {
   await admin.end();
   const url = new URL(serverUrl);
   url.pathname = `/${name}`;
-  const pool = new pg.Pool({ connectionString: url.toString(), max: 10 });
+  // Dropping the database below ends any connection the pool still holds; createPool logs that instead of crashing.
+  const pool = createPool({ connectionString: url.toString(), max: 10 }, () => undefined);
   await migratePg(drizzlePg(pool), { migrationsFolder: MIGRATIONS });
   return {
     db: drizzlePg(pool) as unknown as Db,

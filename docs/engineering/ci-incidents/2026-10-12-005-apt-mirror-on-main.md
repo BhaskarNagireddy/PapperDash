@@ -51,3 +51,7 @@ Locally on Ubuntu 24.04 (the CI runner OS), removing LibreOffice between runs:
 
 - **Found and fixed during testing:** `apt-get --no-download` refused to install cached files passed by path, so the cached install now uses `dpkg -i`. `apt-get install -f` only repairs when given no package names, so it runs as its own step.
 - **One unexplained local observation:** once, the cache folder was empty at the start of a run although the previous run had filled it. It did not happen again in 3 later runs, and an empty cache safely falls back to the mirror.
+
+## Follow-up: confirmed on `main`
+- **CI #35 on `main`** (after PR #8 merged): the tests job installed LibreOffice from the mirror in 21 s and saved the cache. The integration job restored it and installed **from 49 cached packages, with no mirror contact**, in 11 s.
+- **That run failed for an unrelated reason:** see [2026-10-12-006](2026-10-12-006-pool-error-unhandled.md).
