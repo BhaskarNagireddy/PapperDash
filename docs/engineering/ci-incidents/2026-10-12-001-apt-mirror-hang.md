@@ -55,3 +55,16 @@
 ## How it was verified
 - **Locally:** the script installed LibreOffice and printed `LibreOffice 24.2.7.2` in 22 s. The workflow file parses as valid YAML.
 - **CI:** the next push runs both affected jobs through the new script. The result is recorded on PR #7.
+
+## Follow-up: the fix worked in CI the same day
+- **[CI #25](https://github.com/BhaskarNagireddy/PapperDash/actions/runs/38236161557)** (commit 69aa07a), job "Integration tests on PostgreSQL 16 and S3 (MinIO)":
+
+  | Attempt | Time (UTC) | Result |
+  | --- | --- | --- |
+  | 1 | 10:25:23 – 10:28:54 | `::warning::LibreOffice install attempt 1 failed or timed out` |
+  | 2 | 10:29:04 – 10:32:26 | `::warning::LibreOffice install attempt 2 failed or timed out` |
+  | 3 | 10:32:46 – 10:32:59 | Succeeded in 13 s |
+
+  All 96 integration tests then passed. Without the retry, this run would have hung like CI #21.
+- **The mirror stalled in 2 of the 4 runs on 2026-10-12,** so it is unreliable often enough to matter.
+- **If it keeps happening:** cache the downloaded `.deb` files with `actions/cache`, keyed on the package version, so most runs never contact the mirror. The retry stays as the fallback.
