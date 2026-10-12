@@ -12,6 +12,8 @@ on:
 permissions:
   contents: read
 
+# Runner image is pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19. Moving to 26 is a deliberate,
+# tested change (package names, LibreOffice version, toolchain), recorded in docs/engineering/testing.md.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   lint:
     name: Lint, block boundaries and committed secrets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -31,7 +33,7 @@ jobs:
 
   build:
     name: Build, typecheck and migration check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -52,7 +54,7 @@ jobs:
 
   tests:
     name: Unit and integration tests with coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -97,7 +99,7 @@ jobs:
 
   integration-postgres:
     name: Integration tests on PostgreSQL 16 and S3 (MinIO)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       # Throwaway database that exists only inside this job's runner (localhost) and is deleted when the job ends.
@@ -161,7 +163,7 @@ jobs:
 
   security:
     name: Security scans (secrets, code, dependencies)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -189,7 +191,7 @@ jobs:
 
   docker:
     name: Docker image (build, boot, vulnerability scan)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       # Throwaway database on this job's runner only (see the note in integration-postgres).

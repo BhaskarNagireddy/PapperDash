@@ -92,5 +92,14 @@ A repository admin does this once in GitHub. The quickest way is to import [`.gi
 4. Turn on **Require conversation resolution before merging** and **Do not allow bypassing the above settings** (this applies the rule to admins too).
 5. Leave force pushes and branch deletion **off**.
 
+## CI runner image
+- **All jobs run on `ubuntu-24.04`,** pinned rather than `ubuntu-latest`. GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19, and an unannounced OS change could change package names, the LibreOffice version used by the conversion tests, or system tools, making checks fail for reasons unrelated to our code.
+- **Moving to Ubuntu 26 is a separate pull request:**
+  1. Switch the label in `.github/workflows/ci.yml`.
+  2. Run every check.
+  3. Fix any package or tool differences, for example in `.github/scripts/install-libreoffice.sh`.
+  4. Record in that PR what changed between 24.04 and 26 and why.
+- **The production image is separate.** It is defined by `services/core/Dockerfile` (Debian bookworm) and is unaffected by the runner image.
+
 ## When a check fails or is cancelled
 Every CI failure that isn't simply fixed by the PR's next commit is recorded in the [CI incident log](ci-incidents/README.md): what was seen, the root cause, the modules affected, the fix and how it was verified. Check the log first when a re-run fails, because the same cause may already be documented.
