@@ -23,6 +23,7 @@ _Last updated 2026-10-12._
 | Admin console | Not started | Orders, refunds, prices for staff |
 | Delivery | Not started | Delivery partner integration (partner to be chosen) |
 | Stations and lockers | Not started | Fulfilment, station gateway, station agent, kiosk UI (simulator first) |
+| Ratings | Not started | 1–5 stars and a comment after every completed order (ADR 0010) |
 | Mobile app | Not started | iOS and Android (React Native) |
 
 ## Getting papperdash.se live (website first)
@@ -35,13 +36,13 @@ Each step is its own pull request with its own tests, merged only when every che
    - shared request limits;
    - expiry of unpaid orders.
 2. **Website part 1 (`apps/web`, Next.js), built on the design system, in Swedish and English:**
-   - landing and prices;
+   - landing, prices, how it works, and a **waitlist** (public ordering switches on with the pilot station, ADR 0010);
    - sign up and sign in (email, Google, Apple), email verification and password reset;
    - upload, which shows the page count and price;
-   - print settings.
+   - print settings and the fulfilment choice: print here, store in a locker at a chosen station, or delivery.
 3. **Website part 2:**
    - checkout (redirect to Stripe) and the return page;
-   - order tracking and order history;
+   - order tracking (Printing, Printed, In locker / Waiting for courier, Collected by courier, Delivered) and order history;
    - account settings, privacy policy and terms;
    - the QR link landing page (open the app, or go to the app stores);
    - browser tests (Playwright) for each flow, run in CI.
@@ -65,7 +66,7 @@ Each step is its own pull request with its own tests, merged only when every che
    - a security review of the live configuration;
    - alarms tested end to end.
 
-   Then launch papperdash.se with online ordering. The first fulfilment path needs either the delivery integration or a staffed pickup point until stations exist (a decision for you).
+   Then open public ordering on papperdash.se once the pilot station is installed (ADR 0010). There is no staffed pickup point: every order is printed by a station.
 
 After launch: delivery partner integration, stations and lockers (simulator, then the Lund pilot), then the mobile app.
 
@@ -75,4 +76,4 @@ See [open questions](requirements/open-questions.md). For going live, the most u
 - the AWS account owner;
 - the legal texts;
 - which delivery partner to integrate first;
-- how the first orders are fulfilled before stations exist.
+- the pilot station hardware and its site (question 15).

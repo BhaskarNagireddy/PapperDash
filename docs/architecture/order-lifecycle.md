@@ -1,5 +1,7 @@
 # Order lifecycle
 
+How orders reach customers (output tray, locker, delivery rider) is decided in [ADR 0010](../decisions/0010-unattended-station-fulfilment.md).
+
 One state machine, owned by the **orders** block, used by every surface (web, courier app, station screen, admin). Transitions are only made through the orders contract; illegal transitions are rejected and logged. Every transition is timestamped and published as `OrderStateChanged`.
 
 ```mermaid
@@ -16,10 +18,11 @@ stateDiagram-v2
   Failed --> Refunded: cannot be fulfilled
 
   Printed --> Collected: walk-up — collected at printer
-  Printed --> Ready: locker assigned, PIN/QR issued
-  Ready --> Collected: customer opens assigned locker
+  Printed --> Ready: packed into a locker
+  Ready --> Collected: customer scans station QR, opens locker, closes door
+  Ready --> SupportRequired: unclaimed after 48 h
   Printed --> ReadyForCourier: delivery order placed in locker
-  ReadyForCourier --> OutForDelivery: courier token verified, locker opened
+  ReadyForCourier --> OutForDelivery: rider code entered at station, locker door closed
   OutForDelivery --> Delivered: proof of delivery
   OutForDelivery --> DeliveryFailed
   DeliveryFailed --> SupportRequired

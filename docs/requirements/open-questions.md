@@ -11,10 +11,19 @@ Implementation of a block starts only once its questions below are answered. Ans
 - Limits: 50 printed pages per order, 50 MB per file (admin-editable).
 - Launch prices (SEK, VAT incl., per order by printed pages): 1–5: 10 kr, 6–15: 16 kr, 16–25: 25 kr, 26–50: 50 kr (admin-editable).
 - Prototype prints black and white only; delivery is priced and charged by the delivery partner's app (ADR 0006).
-- Scope: Phase 1 = online ordering + courier delivery; stations/lockers via simulator.
+- Scope: Phase 1 = online ordering + courier delivery; stations/lockers via simulator (fulfilment model updated 2026-10-12, see below).
 - Stack: TypeScript end to end. Hosting: AWS Stockholm.
 - Payments: Stripe (cards, wallets, Klarna). Couriers: delivery partners' apps (ADR 0006; replaces the earlier own-riders plan).
 - Formats: PDF, JPG, PNG + Office converted server-side. Retention: 24 h after fulfilment, 2 h for unpaid uploads.
+
+## Confirmed (2026-10-12): fulfilment ([ADR 0010](../decisions/0010-unattended-station-fulfilment.md))
+
+- No staffed pickup point. Every order is printed by an unattended PapperDash station: output tray, storage lockers, or collection by a delivery partner's rider from a locker.
+- Customers open their locker by scanning the station screen's QR code in the app or website, then tapping "Open my locker". Closing the door marks the order collected.
+- Riders enter the order's courier code on the station screen. Closing the door marks the order out for delivery, and the partner confirms delivery.
+- Unclaimed lockers: reminders at 24 h and 44 h, then support after 48 h. No refund.
+- Ratings: every completed order asks for 1–5 stars and an optional comment, visible to staff only.
+- Until the pilot station exists, papperdash.se is information and a waitlist. Ordering runs on staging against the simulator.
 
 ## Still open
 
@@ -29,4 +38,5 @@ Implementation of a block starts only once its questions below are answered. Ans
 | 11 | Company Apple Developer and Google Play developer accounts (needed to publish the apps and to issue Google/Apple sign-in client IDs) | apps/mobile, identity |
 | 12 | Malware scanning of uploads (ClamAV in the doc-worker) must be switched on before public launch; the scanner port is in place with a pass-through adapter | documents |
 | 13 | Stripe account in the company's name (needs the organisation number from question 4); go-live checklist in ADR 0007 | payments |
+| 15 | Pilot station hardware: printer model, packing method, locker count and door sensors, screen, and site (address in Lund?) | stations, launch date |
 | 14 | VAT registration (momsregistrering) and Stripe Tax: switch on only after the registration is recorded in Stripe (ADR 0007, Tax plan) | payments, pricing |
