@@ -121,6 +121,19 @@ describe('automatic deletion', () => {
     expect(h.storage.objects.has(`source/${id}`)).toBe(false);
   });
 
+  it('ignores order updates that arrive after the customer already deleted the file', async () => {
+    // The order's events are still queued (not yet delivered) when the customer deletes the file, so the
+    // documents block hears about the order only afterwards. It must leave the deleted file alone.
+    const id = await readyDocument(h, token);
+    const { body: order } = await h.http().post('/v1/orders').set('Authorization', `Bearer ${token}`).send({ documentId: id, fulfilment: 'delivery', settings: {} }).expect(201);
+    await h.http().post(`/v1/orders/${order.id}/cancel`).set('Authorization', `Bearer ${token}`).expect(200);
+    await h.http().delete(`/v1/documents/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
+    await h.flush();
+    const doc = await h.http().get(`/v1/documents/${id}`).set('Authorization', `Bearer ${token}`).expect(200);
+    expect(doc.body).toMatchObject({ status: 'deleted', deleteAfter: null });
+    expect(h.storage.objects.has(`source/${id}`)).toBe(false);
+  });
+
   it('lets customers delete their own file straight away when no order needs it', async () => {
     const id = await readyDocument(h, token);
     await h.http().delete(`/v1/documents/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
