@@ -18,7 +18,7 @@ All production data stays in **AWS eu-north-1 (Stockholm)** for GDPR. Everything
 | --- | --- |
 | Containers (core, doc-worker, gateway, web, admin) | ECS Fargate, 2+ tasks per service across 2 AZs, rolling deploys with automatic rollback |
 | Database | RDS PostgreSQL 16, Multi-AZ in production, one schema per block, automated backups + PITR |
-| Queue / cache / rate limits | ElastiCache Redis |
+| Job leases and rate limits | PostgreSQL tables shared by every task ([ADR 0009](../decisions/0009-coordination-in-postgresql.md)); ElastiCache Redis only if volume ever requires it |
 | Documents | S3 with SSE-KMS, block public access, lifecycle rule as a safety net behind the retention job |
 | CDN and TLS | CloudFront + ACM certificates, AWS WAF |
 | Email | Amazon SES (eu-north-1) |

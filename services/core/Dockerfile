@@ -3,7 +3,10 @@
 #   docker build -f services/core/Dockerfile -t papperdash-core .
 # Base images come from AWS's public mirror of the official images (no Docker Hub rate limits in AWS).
 
-FROM public.ecr.aws/docker/library/node:22-bookworm-slim AS build
+# The official Node image, from AWS's mirror by default. CI falls back to Docker Hub (the same official image)
+# when the mirror rate-limits anonymous pulls (docs/engineering/ci-incidents/2026-10-12-004).
+ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22-bookworm-slim
+FROM ${NODE_IMAGE} AS build
 WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
@@ -16,7 +19,7 @@ RUN pnpm --filter @papperdash/contracts build \
  && pnpm --filter @papperdash/core build \
  && pnpm --filter @papperdash/core deploy --prod --legacy /out
 
-FROM public.ecr.aws/docker/library/node:22-bookworm-slim
+FROM ${NODE_IMAGE}
 # LibreOffice (Writer, Calc, Impress, no GUI) converts Word/Excel/PowerPoint uploads to PDF; fonts keep layouts faithful.
 # tini forwards signals so ECS can stop the container gracefully during rolling deploys.
 # npm, npx and corepack are removed: the app never uses them at runtime, so they would only add attack surface

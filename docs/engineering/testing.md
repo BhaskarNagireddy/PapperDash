@@ -15,8 +15,9 @@ Every change reaches `main` through a pull request. **Branch protection makes ev
 | **Unit** | `src/**/*.test.ts` (label `unit`), `packages/contracts/src/*.test.ts` | One function or adapter in isolation: the order state machine, retention rules, config safety checks, the Stripe adapter against a recorded fake of Stripe's API | Every PR, in seconds |
 | **Integration** | `services/core/test/*.test.ts` (label `integration`) | The real HTTP API on a freshly migrated database: sign-in, uploads, orders, payments, refunds, permissions between customers | Every PR, on in-memory PostgreSQL |
 | **Integration on real infrastructure** | Same tests, with `TEST_DATABASE_URL` and `S3_TEST_ENDPOINT` set | The same flows on PostgreSQL 16 (the production engine), and file uploads, downloads and deletes on S3 (MinIO) | Every PR |
+| **Multi-instance safety** | `test/hardening.e2e.test.ts` | Only the website origin passes CORS; request limits answer 429 (reset emails are capped silently); a second instance cannot run a job whose lease another holds, and takes over when it lapses; abandoned drafts and checkouts expire, never a Klarna payment still being confirmed, and a late payment is refunded | Every PR |
 | **Data exposure** | `test/data-exposure.e2e.test.ts` | No response or log line ever contains a password, hash, token, storage key, Stripe secret or another customer's data | Every PR |
-| **Container** | CI job "Docker image" | The production image builds, runs as non-root, applies migrations, reports ready, sends security headers, and refuses unsafe production settings | Every PR |
+| **Container** | CI job "Docker image" | The production image builds, runs as non-root, applies migrations, reports ready, sends security headers, allows only listed CORS origins, and refuses unsafe production settings | Every PR |
 | **End-to-end (browser)** | `apps/web/e2e` (with the website) | A real browser signs up, uploads, pays in the Stripe sandbox and tracks the order | Planned with the website |
 | **Load** | `tests/load` (before launch) | Response times and error rate at expected exam-week peak | Before launch, and before big changes |
 
@@ -90,3 +91,15 @@ A repository admin does this once in GitHub. The quickest way is to import [`.gi
    - `Docker image (build, boot, vulnerability scan)`
 4. Turn on **Require conversation resolution before merging** and **Do not allow bypassing the above settings** (this applies the rule to admins too).
 5. Leave force pushes and branch deletion **off**.
+
+## CI runner image
+- **All jobs run on `ubuntu-24.04`,** pinned rather than `ubuntu-latest`. GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19, and an unannounced OS change could change package names, the LibreOffice version used by the conversion tests, or system tools, making checks fail for reasons unrelated to our code.
+- **Moving to Ubuntu 26 is a separate pull request:**
+  1. Switch the label in `.github/workflows/ci.yml`.
+  2. Run every check.
+  3. Fix any package or tool differences, for example in `.github/scripts/install-libreoffice.sh`.
+  4. Record in that PR what changed between 24.04 and 26 and why.
+- **The production image is separate.** It is defined by `services/core/Dockerfile` (Debian bookworm) and is unaffected by the runner image.
+
+## When a check fails or is cancelled
+Every CI failure that isn't simply fixed by the PR's next commit is recorded in the [CI incident log](ci-incidents/README.md): what was seen, the root cause, the modules affected, the fix and how it was verified. Check the log first when a re-run fails, because the same cause may already be documented.

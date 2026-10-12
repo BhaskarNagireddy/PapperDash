@@ -38,8 +38,11 @@ flowchart LR
 | A bad release | Rolling deploys start new tasks before stopping old ones (no downtime). The ECS **deployment circuit breaker** rolls back automatically if new tasks fail their health checks. |
 | A database change breaks old code | Migrations run as a one-off task before each deploy and are written to work with both the old and new code (expand, then contract later). |
 | Lost or duplicated work | Events go through the outbox and are delivered at least once. Every consumer is idempotent; payments and print jobs use idempotency keys. |
+| Two tasks doing the same background job | Each job (event relay, file deletion, order expiry) runs on one task at a time under a database lease. If that task dies, another takes over within a minute ([ADR 0009](../decisions/0009-coordination-in-postgresql.md)). |
+| Abuse (password guessing, sign-up or upload floods) | Request limits are counted in the shared database, so adding tasks does not raise them. Over a limit, the API answers 429 with a retry time. AWS WAF adds limits per address in front. |
+| Another website calling the API with a customer's cookie | Only the exact origins in `CORS_ORIGINS` (papperdash.se) may make credentialed browser calls. In production the app refuses to start without it, or with a wildcard. |
 | Data loss | RDS automated backups with point-in-time restore (14 days). S3 versioning on documents until the retention job deletes them. Restore is tested before launch. |
-| Secrets exposure | Keys live in Secrets Manager and are injected at start. The app refuses to start in production with unsafe settings (no SES, no KMS, no https). |
+| Secrets exposure | Keys live in Secrets Manager and are injected at start. The app refuses to start in production with unsafe settings (no SES, no KMS, no https, no CORS allowlist). |
 | Not noticing problems | CloudWatch alarms on: 5xx rate, p95 latency, unhealthy tasks, database CPU and storage, and outbox events stuck retrying. Alerts go by email and SMS to on-call. |
 
 ## Docker and AWS: how they fit

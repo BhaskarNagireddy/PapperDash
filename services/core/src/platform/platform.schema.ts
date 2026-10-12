@@ -30,3 +30,25 @@ export const processedEvents = platform.table(
   },
   (t) => [primaryKey({ columns: [t.consumer, t.eventId] })],
 );
+
+/**
+ * Leases: which server instance currently runs a background job (the event relay, retention, expiry).
+ * Taking a lease is one atomic upsert, so with several instances exactly one runs each job; if that
+ * instance dies, its lease expires and another takes over.
+ */
+export const leases = platform.table('leases', {
+  name: text('name').primaryKey(),
+  holder: text('holder').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+/** Request counters per key and fixed time window, shared by every server instance. */
+export const rateLimits = platform.table(
+  'rate_limits',
+  {
+    key: text('key').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    count: integer('count').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.key, t.windowStart] }), index('rate_limits_window_idx').on(t.windowStart)],
+);

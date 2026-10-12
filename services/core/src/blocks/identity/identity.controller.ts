@@ -27,8 +27,8 @@ export class IdentityController {
   ) {}
 
   @Post('register')
-  async register(@Body(new ZodPipe(RegisterInput)) body: RegisterInput) {
-    const user = await this.identity.register(body);
+  async register(@Body(new ZodPipe(RegisterInput)) body: RegisterInput, @Req() req: Request) {
+    const user = await this.identity.register(body, req.ip ?? 'unknown');
     return { user, next: 'verify-email' };
   }
 
@@ -82,8 +82,8 @@ export class IdentityController {
 
   @Post('password-reset/request')
   @HttpCode(202)
-  async requestReset(@Body(new ZodPipe(RequestPasswordResetInput)) body: z.infer<typeof RequestPasswordResetInput>) {
-    await this.identity.requestPasswordReset(body.email);
+  async requestReset(@Body(new ZodPipe(RequestPasswordResetInput)) body: z.infer<typeof RequestPasswordResetInput>, @Req() req: Request) {
+    await this.identity.requestPasswordReset(body.email, req.ip ?? 'unknown');
     return { message: 'If an account exists for this email, we have sent a reset link.' };
   }
 

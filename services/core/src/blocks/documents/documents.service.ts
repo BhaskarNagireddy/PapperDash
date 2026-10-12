@@ -20,6 +20,9 @@ import { APP_CONFIG, type AppConfig } from '../../platform/config.js';
 import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EventBus, Outbox } from '../../platform/events.js';
 import { newId } from '../../platform/ids.js';
+import { Leases } from '../../platform/leases.js';
+import { PeriodicJob } from '../../platform/periodic.js';
+import { RateLimiter } from '../../platform/rate-limit.js';
 import { PricingService } from '../pricing/index.js';
 import { documentOrders, documents } from './documents.schema.js';
 import { DocumentProcessor, MalwareScanner } from './processing/processor.js';
@@ -34,7 +37,7 @@ const PRINT_URL_TTL_SEC = 5 * 60;
 @Injectable()
 export class DocumentsService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(DocumentsService.name);
-  private sweepTimer?: NodeJS.Timeout;
+  private readonly sweepJob = new PeriodicJob('Retention sweep', this.log);
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -42,6 +45,8 @@ export class DocumentsService implements OnModuleInit, OnModuleDestroy {
     private readonly clock: Clock,
     private readonly outbox: Outbox,
     private readonly bus: EventBus,
+    private readonly leases: Leases,
+    private readonly limits: RateLimiter,
     private readonly storage: ObjectStorage,
     private readonly processor: DocumentProcessor,
     private readonly scanner: MalwareScanner,
@@ -56,17 +61,19 @@ export class DocumentsService implements OnModuleInit, OnModuleDestroy {
     this.bus.subscribe<OrderStateChanged>('orders.OrderStateChanged', 'documents.order-state', (e, tx) =>
       this.trackOrder(tx, null, e.payload.orderId, e.payload.to, new Date(e.occurredAt)),
     );
-    if (this.config.retentionSweepMs > 0) this.sweepTimer = setInterval(() => void this.sweep().catch((err) => this.log.error('Retention sweep failed', err)), this.config.retentionSweepMs);
+    // One instance runs it per interval; the lease outlives the interval so others skip rather than repeat it.
+    this.sweepJob.start(this.config.retentionSweepMs, () => this.leases.runExclusive('document-retention', this.config.retentionSweepMs, () => this.sweep()));
   }
 
   onModuleDestroy() {
-    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    return this.sweepJob.stop();
   }
 
   // ---------- Customer: upload ----------
 
   /** Step 1: register the file and get a direct upload to encrypted storage. */
   async createUpload(user: CurrentUser, input: CreateUploadInput): Promise<{ document: DocumentView; upload: UploadTarget }> {
+    await this.limits.enforce(`upload:${user.id}`, this.config.rateLimits.uploadsPerUser, 'You have uploaded a lot of files in a short time. Try again later.');
     const { maxFileMb } = await this.pricing.active('SE');
     const maxBytes = maxFileMb * 1024 * 1024;
     if (input.sizeBytes > maxBytes) {

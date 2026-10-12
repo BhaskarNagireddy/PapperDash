@@ -1,4 +1,4 @@
-import { ConflictException, HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import {
   OPEN_PAYMENT_STATUSES,
   TERMINAL_STATES,
@@ -25,6 +25,8 @@ import { APP_CONFIG, type AppConfig } from '../../platform/config.js';
 import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EventBus, Outbox } from '../../platform/events.js';
 import { newId } from '../../platform/ids.js';
+import { Leases } from '../../platform/leases.js';
+import { PeriodicJob } from '../../platform/periodic.js';
 import { OrdersService } from '../orders/index.js';
 import { payments, refunds, webhookEvents } from './payments.schema.js';
 
@@ -38,10 +40,16 @@ const SYSTEM: OrderActor = { kind: 'system', block: 'payments' };
 const CHECKOUT_TTL_MS = 30 * 60 * 1000;
 /** A checkout about to expire is replaced rather than resumed, so the customer is not sent to a page that dies mid-payment. */
 const RESUME_MARGIN_MS = 5 * 60 * 1000;
+/**
+ * An order still unpaid this long after its last checkout is abandoned and cancelled. Well past the checkout
+ * lifetime, so no Stripe page can still be open; Klarna/bank payments still being confirmed are never touched.
+ */
+export const ABANDONED_CHECKOUT_MS = 2 * 60 * 60 * 1000;
 
 @Injectable()
-export class PaymentsService implements OnModuleInit {
+export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(PaymentsService.name);
+  private readonly expiryJob = new PeriodicJob('Checkout expiry', this.log);
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -51,6 +59,7 @@ export class PaymentsService implements OnModuleInit {
     private readonly outbox: Outbox,
     private readonly bus: EventBus,
     private readonly orders: OrdersService,
+    private readonly leases: Leases,
   ) {}
 
   onModuleInit() {
@@ -67,6 +76,28 @@ export class PaymentsService implements OnModuleInit {
       },
       own,
     );
+    // One instance runs it per interval; the lease outlives the interval so others skip rather than repeat it.
+    this.expiryJob.start(this.config.expirySweepMs, () => this.leases.runExclusive('checkout-expiry', this.config.expirySweepMs, () => this.expireAbandonedCheckouts()));
+  }
+
+  onModuleDestroy() {
+    return this.expiryJob.stop();
+  }
+
+  /**
+   * Cancels orders left in AwaitingPayment for ABANDONED_CHECKOUT_MS. The cancellation event closes any
+   * Stripe session; if a payment still lands afterwards, it is refunded automatically. Returns how many.
+   */
+  async expireAbandonedCheckouts(): Promise<number> {
+    const cutoff = new Date(this.clock.now().getTime() - ABANDONED_CHECKOUT_MS);
+    let cancelled = 0;
+    for (const orderId of await this.orders.staleIds('AwaitingPayment', cutoff)) {
+      const latest = await this.latestPayment(orderId);
+      // A retry starts a new checkout without changing the order, so judge by the latest attempt too.
+      if (latest && (latest.createdAt >= cutoff || latest.status === 'processing' || latest.status === 'succeeded')) continue;
+      if (await this.orders.cancelIfUnchanged(orderId, 'AwaitingPayment', SYSTEM, 'Payment not completed within 2 hours')) cancelled++;
+    }
+    return cancelled;
   }
 
   // ---------- Customer: checkout ----------

@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import type { Limit } from './rate-limit.js';
 
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().default(4000),
   PUBLIC_WEB_URL: z.url().default('http://localhost:3000'),
+  /** Comma-separated website origins allowed to call the API from a browser, e.g. "https://www.papperdash.se,https://papperdash.se". */
+  CORS_ORIGINS: z.string().default(''),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('true')
@@ -50,10 +53,42 @@ export type AppConfig = {
   email: { from: string; region: string } | null;
   /** Document storage; null keeps files in memory (tests and quick local runs only). */
   storage: { bucket: string; region: string; endpoint?: string; kmsKeyId?: string } | null;
+  /** Browser origins allowed to call the API (CORS). Only these websites can use a customer's session from a browser. */
+  corsOrigins: string[];
+  /** Abuse limits; shared by every instance through PostgreSQL. */
+  rateLimits: RateLimits;
   /** Poll interval for the outbox relay; 0 disables the timer (tests flush manually). */
   outboxPollMs: number;
   /** How often expired documents are deleted; 0 disables the timer. */
   retentionSweepMs: number;
+  /** How often abandoned orders are cancelled and old rate-limit windows pruned; 0 disables the timer. */
+  expirySweepMs: number;
+};
+
+export interface RateLimits {
+  /** New accounts per IP address. */
+  registerPerIp: Limit;
+  /** Password-reset emails per address (extra requests are silently dropped, so the answer reveals nothing). */
+  resetPerEmail: Limit;
+  /** Password-reset requests per IP address. */
+  resetPerIp: Limit;
+  /** Failed logins per email + IP before login is locked. */
+  loginFailures: Limit;
+  /** Upload registrations per customer. */
+  uploadsPerUser: Limit;
+  /** QR codes per station. */
+  qrPerStation: Limit;
+}
+
+const MIN = 60 * 1000;
+const HOUR = 60 * MIN;
+export const DEFAULT_RATE_LIMITS: RateLimits = {
+  registerPerIp: { max: 10, windowMs: HOUR },
+  resetPerEmail: { max: 3, windowMs: HOUR },
+  resetPerIp: { max: 20, windowMs: HOUR },
+  loginFailures: { max: 5, windowMs: 15 * MIN },
+  uploadsPerUser: { max: 100, windowMs: HOUR },
+  qrPerStation: { max: 240, windowMs: HOUR },
 };
 
 export class UnsafeProductionConfigError extends Error {}
@@ -72,6 +107,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
       // Without SES, emails (with password-reset and verification links) would be written to the logs.
       !e.EMAIL_FROM && 'EMAIL_FROM is required (account emails must be sent through SES, never logged)',
       !e.PUBLIC_WEB_URL.startsWith('https://') && 'PUBLIC_WEB_URL must use https',
+      !csv(e.CORS_ORIGINS).length && 'CORS_ORIGINS is required (the website origins allowed to call the API)',
+      csv(e.CORS_ORIGINS).some((o) => !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(o)) && 'CORS_ORIGINS entries must be exact https origins, never "*" or a path',
     ].filter((p): p is string => !!p);
     if (problems.length) throw new UnsafeProductionConfigError(`Refusing to start in production:\n- ${problems.join('\n- ')}`);
   }
@@ -82,6 +119,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
     cookieSecure: e.COOKIE_SECURE,
     stationKeys: e.STATION_KEYS,
     oauthAudiences: { google: csv(e.GOOGLE_CLIENT_IDS), apple: csv(e.APPLE_CLIENT_IDS) },
+    // Local development: the website runs on localhost:3000 unless told otherwise.
+    corsOrigins: csv(e.CORS_ORIGINS).length ? csv(e.CORS_ORIGINS) : e.NODE_ENV === 'production' ? [] : ['http://localhost:3000'],
+    rateLimits: DEFAULT_RATE_LIMITS,
     stripe:
       e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET
         ? { secretKey: e.STRIPE_SECRET_KEY, webhookSecret: e.STRIPE_WEBHOOK_SECRET, automaticTax: e.STRIPE_AUTOMATIC_TAX }
@@ -90,6 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
     storage: e.S3_BUCKET ? { bucket: e.S3_BUCKET, region: e.S3_REGION, endpoint: e.S3_ENDPOINT, kmsKeyId: e.S3_KMS_KEY_ID } : null,
     outboxPollMs: 500,
     retentionSweepMs: 5 * 60 * 1000,
+    expirySweepMs: 5 * 60 * 1000,
   };
 }
 

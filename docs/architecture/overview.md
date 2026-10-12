@@ -75,7 +75,7 @@ Solid arrows are synchronous calls through a block's contract; dotted arrows are
 ## Events and reliability
 
 - Each block writes its events to an **outbox table in the same transaction** as its state change, so an event is never lost and never published for a change that rolled back.
-- A relay publishes outbox rows to the event bus (Redis Streams / BullMQ at launch; Amazon SQS/EventBridge when volume requires it — only the relay changes).
+- A relay publishes outbox rows to the in-process event bus. Only the instance holding the relay lease runs it ([ADR 0009](../decisions/0009-coordination-in-postgresql.md)). Amazon SQS/EventBridge come in when volume requires them; only the relay changes.
 - Consumers are **idempotent**: every event carries an ID and consumers record what they have processed. This is what stops a print job being sent twice.
 - Print jobs sent to a station are acknowledged by the agent. Unacknowledged jobs are retried; stations queue locally when offline and replay on reconnect.
 

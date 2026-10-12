@@ -20,8 +20,8 @@ import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EMAIL_PROVIDER } from '../../platform/email.js';
 import { Outbox } from '../../platform/events.js';
 import { newId, newSecret, sha256 } from '../../platform/ids.js';
+import { RateLimiter } from '../../platform/rate-limit.js';
 import { externalIdentities, oneTimeTokens, qrChallenges, sessions, users } from './identity.schema.js';
-import { LoginThrottle } from './login-throttle.js';
 import { authEmails } from './messages.js';
 import { OAuthTokenError, OAuthVerifier } from './oauth-verifier.js';
 import { getDummyHash, hashPassword, verifyPassword } from './password.js';
@@ -45,13 +45,14 @@ export class IdentityService {
     @Inject(EMAIL_PROVIDER) private readonly email: EmailProvider,
     private readonly clock: Clock,
     private readonly outbox: Outbox,
-    private readonly throttle: LoginThrottle,
+    private readonly limits: RateLimiter,
     private readonly oauth: OAuthVerifier,
   ) {}
 
   // ---------- Registration and email verification ----------
 
-  async register(input: RegisterInput): Promise<CurrentUser> {
+  async register(input: RegisterInput, clientIp: string): Promise<CurrentUser> {
+    await this.limits.enforce(`register:${clientIp}`, this.config.rateLimits.registerPerIp, 'Too many accounts created from this network. Try again later.');
     const passwordHash = await hashPassword(input.password);
     const now = this.clock.now();
     const id = newId('usr');
@@ -91,18 +92,24 @@ export class IdentityService {
   // ---------- Email + password (the main login) ----------
 
   async login(input: LoginInput, clientIp: string): Promise<{ user: CurrentUser; session: IssuedSession }> {
-    const throttleKey = `${input.email}|${clientIp}`;
-    if (this.throttle.isLocked(throttleKey)) {
-      throw new HttpException({ error: 'too_many_attempts', message: 'Too many failed attempts. Wait 15 minutes or reset your password.' }, HttpStatus.TOO_MANY_REQUESTS);
+    // Shared by every instance, so spreading guesses across servers does not raise the limit.
+    const throttleKey = `login-fail:${input.email}|${clientIp}`;
+    const limit = this.config.rateLimits.loginFailures;
+    const failures = await this.limits.current(throttleKey, limit);
+    if (failures.count >= limit.max) {
+      throw new HttpException(
+        { error: 'too_many_attempts', message: 'Too many failed attempts. Wait 15 minutes or reset your password.', retryAfterSec: failures.retryAfterSec },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
     const [user] = await this.db.select().from(users).where(eq(users.email, input.email));
     // Accounts created with Google or Apple have no password: they fail here exactly like a wrong password.
     const ok = await verifyPassword(user?.passwordHash ?? (await getDummyHash()), input.password);
     if (!user || !user.passwordHash || !ok) {
-      this.throttle.recordFailure(throttleKey);
+      await this.limits.hit(throttleKey, limit);
       throw new UnauthorizedException({ error: 'invalid_credentials', message: 'Wrong email or password. Try again or reset your password.' });
     }
-    this.throttle.reset(throttleKey);
+    await this.limits.reset(throttleKey);
     const session = await this.db.transaction(async (tx) => {
       const s = await this.issueSession(tx, user.id, 'web', null, WEB_SESSION_TTL_MS);
       await this.outbox.append<IdentityEvent>(tx, { type: 'identity.UserLoggedIn', version: 1, aggregateId: user.id, payload: { userId: user.id, method: 'password' } });
@@ -187,7 +194,11 @@ export class IdentityService {
   // ---------- Password reset ----------
 
   /** Always succeeds, so the response does not reveal whether the email has an account. */
-  async requestPasswordReset(email: string): Promise<void> {
+  async requestPasswordReset(email: string, clientIp: string): Promise<void> {
+    await this.limits.enforce(`reset-ip:${clientIp}`, this.config.rateLimits.resetPerIp, 'Too many reset requests from this network. Try again later.');
+    // Over the per-email cap we quietly send nothing: an error here would reveal that the email has an account
+    // and would let anyone flood a stranger's inbox.
+    if (!(await this.limits.hit(`reset-email:${email}`, this.config.rateLimits.resetPerEmail)).allowed) return;
     const [user] = await this.db.select().from(users).where(eq(users.email, email));
     if (!user) return;
     const token = newSecret();
@@ -217,6 +228,7 @@ export class IdentityService {
 
   /** Called by a station to show a fresh QR code. */
   async createQrChallenge(stationId: string): Promise<QrChallengeView> {
+    await this.limits.enforce(`qr:${stationId}`, this.config.rateLimits.qrPerStation, 'This station asked for too many QR codes. Try again shortly.');
     const token = newSecret();
     const now = this.clock.now();
     const row = {

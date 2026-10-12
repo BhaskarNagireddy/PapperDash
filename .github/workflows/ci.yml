@@ -12,6 +12,8 @@ on:
 permissions:
   contents: read
 
+# Runner image is pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19. Moving to 26 is a deliberate,
+# tested change (package names, LibreOffice version, toolchain), recorded in docs/engineering/testing.md.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   lint:
     name: Lint, block boundaries and committed secrets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -31,7 +33,7 @@ jobs:
 
   build:
     name: Build, typecheck and migration check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -52,8 +54,8 @@ jobs:
 
   tests:
     name: Unit and integration tests with coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: write # coverage report comment on the PR
@@ -63,9 +65,9 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
       - name: Install LibreOffice Writer (Word-to-PDF conversion tests)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer-nogui
+        # Retries a stalled package mirror instead of hanging (docs/engineering/ci-incidents/2026-10-12-001).
+        timeout-minutes: 15
+        run: .github/scripts/install-libreoffice.sh
       - run: pnpm install --frozen-lockfile
       - name: Run all tests with coverage (fails below the minimum coverage)
         run: pnpm test:coverage
@@ -97,8 +99,8 @@ jobs:
 
   integration-postgres:
     name: Integration tests on PostgreSQL 16 and S3 (MinIO)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     services:
       # Throwaway database that exists only inside this job's runner (localhost) and is deleted when the job ends.
       # Its password is not a secret: nothing outside the runner can reach it. Service containers start before
@@ -150,10 +152,10 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
-      - name: Install LibreOffice Writer
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer-nogui
+      - name: Install LibreOffice Writer (Word-to-PDF conversion tests)
+        # Retries a stalled package mirror instead of hanging (docs/engineering/ci-incidents/2026-10-12-001).
+        timeout-minutes: 15
+        run: .github/scripts/install-libreoffice.sh
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @papperdash/contracts build
       - name: Integration tests against PostgreSQL 16 and MinIO
@@ -161,7 +163,7 @@ jobs:
 
   security:
     name: Security scans (secrets, code, dependencies)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -189,7 +191,7 @@ jobs:
 
   docker:
     name: Docker image (build, boot, vulnerability scan)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       # Throwaway database on this job's runner only (see the note in integration-postgres).
@@ -204,7 +206,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build the image
-        run: docker build -f services/core/Dockerfile -t papperdash-core:ci .
+        # Falls back to Docker Hub if AWS's mirror rate-limits the base image (docs/engineering/ci-incidents/2026-10-12-004).
+        timeout-minutes: 15
+        run: .github/scripts/build-image.sh papperdash-core:ci
       - name: Runs as a non-root user
         run: test "$(docker run --rm --entrypoint id papperdash-core:ci -u)" != "0"
       - name: Applies migrations to PostgreSQL 16
@@ -224,6 +228,11 @@ jobs:
           echo "$headers"
           echo "$headers" | grep -qi '^x-content-type-options: nosniff'
           ! echo "$headers" | grep -qi '^x-powered-by'
+      - name: Lets only the listed website origins call the API from a browser (CORS)
+        run: |
+          preflight() { curl -si -X OPTIONS http://localhost:4000/v1/auth/login -H "Origin: $1" -H 'Access-Control-Request-Method: POST'; }
+          preflight http://localhost:3000 | grep -qi '^access-control-allow-origin: http://localhost:3000'
+          ! preflight https://evil.example | grep -qi '^access-control-allow-origin'
       - name: Refuses unsafe production settings
         run: |
           if docker run --rm --network host -e DATABASE_URL papperdash-core:ci > out.txt 2>&1; then
