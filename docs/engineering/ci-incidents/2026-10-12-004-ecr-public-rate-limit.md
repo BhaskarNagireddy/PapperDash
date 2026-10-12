@@ -9,7 +9,7 @@
 | Run | [CI #29](https://github.com/BhaskarNagireddy/PapperDash/actions/runs/38243142172), job 114790421687 |
 | Commit | aa21e3a (PR #7, pin CI to ubuntu-24.04) |
 | Category | infrastructure |
-| Status | fixed (fallback added) |
+| Status | monitoring: fallback added, not yet exercised by a real 429 |
 
 ## What was seen
 ```
@@ -46,3 +46,8 @@ The job failed 2 seconds into the build, before any of our code was compiled.
 ## How it was verified
 - **Locally:** the workflow parses as valid YAML and the script passes `bash -n`. Docker registries are not reachable from the assistant's container, so the build itself is verified in CI.
 - **CI:** the next push to PR #7 runs the new script. Its log shows the base image source used.
+
+## Follow-up: the next run
+- **[CI #30](https://github.com/BhaskarNagireddy/PapperDash/actions/runs/38243322913)** (commit 743aaea) built the image on the first attempt from `public.ecr.aws` (`Built papperdash-core:ci from public.ecr.aws/docker/library/node:22-bookworm-slim`). All 6 checks passed.
+- **So the limit had cleared by then, and the Docker Hub fallback has not yet run for real.** It stays "monitoring" until a run shows the fallback building the image.
+- **When it does,** link that run here and set the status to fixed.
