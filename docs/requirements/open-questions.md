@@ -38,5 +38,5 @@ Implementation of a block starts only once its questions below are answered. Ans
 | 11 | Company Apple Developer and Google Play developer accounts (needed to publish the apps and to issue Google/Apple sign-in client IDs) | apps/mobile, identity |
 | 12 | Malware scanning of uploads (ClamAV in the doc-worker) must be switched on before public launch; the scanner port is in place with a pass-through adapter | documents |
 | 13 | Stripe account in the company's name (needs the organisation number from question 4); go-live checklist in ADR 0007 | payments |
-| 15 | Pilot station hardware: printer model, packing method, locker count and door sensors, screen, and site (address in Lund?) | stations, launch date |
 | 14 | VAT registration (momsregistrering) and Stripe Tax: switch on only after the registration is recorded in Stripe (ADR 0007, Tax plan) | payments, pricing |
+| 15 | Pilot station hardware: printer model, packing method, locker count and door sensors, screen, and site (address in Lund?) | stations, launch date |
