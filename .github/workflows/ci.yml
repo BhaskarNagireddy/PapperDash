@@ -206,7 +206,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build the image
-        run: docker build -f services/core/Dockerfile -t papperdash-core:ci .
+        # Falls back to Docker Hub if AWS's mirror rate-limits the base image (docs/engineering/ci-incidents/2026-10-12-004).
+        timeout-minutes: 15
+        run: .github/scripts/build-image.sh papperdash-core:ci
       - name: Runs as a non-root user
         run: test "$(docker run --rm --entrypoint id papperdash-core:ci -u)" != "0"
       - name: Applies migrations to PostgreSQL 16
