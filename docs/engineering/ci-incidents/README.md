@@ -13,6 +13,8 @@ Every time a check fails, is cancelled, or passes on one run and fails on anothe
 3. Add a row to the index at the bottom of this file.
 4. Commit it in the same pull request as the fix. If no fix is needed, commit it on its own.
 
+Before re-running a failed job, check that its commit is the PR's latest. On the PR page, compare the run's commit with the last commit listed. A re-run of an older commit only re-tests code that has already been replaced.
+
 ## Categories
 
 | Category | Meaning | Typical action |

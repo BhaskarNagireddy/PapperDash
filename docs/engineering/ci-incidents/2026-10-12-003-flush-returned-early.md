@@ -42,3 +42,14 @@ Seen once in 5 full runs. It passed every time when run on its own.
 
 ## How it was verified
 - **Locally, after the fix:** 8 full runs in a row against PostgreSQL 16, each with 122 tests passing, no failures, no unhandled errors. The coverage run also passed.
+
+## Follow-up: also reproduced in CI
+- **A manual re-run of [CI #24, attempt 2](https://github.com/BhaskarNagireddy/PapperDash/actions/runs/38234913674)** on the old commit 368c769, which has neither fix, failed at 10:47 UTC with the same error:
+  ```
+  FAIL test/hardening.e2e.test.ts > background jobs on their production timers > relays events, ...
+  Error: Document not ready: {..."status":"processing"...}
+  Tests  1 failed | 94 passed (95)
+  ```
+- **So the bug is not specific to one machine.** It shows up on GitHub's runners too, and a re-run of an old commit can still fail on it.
+- **The fix is in 69aa07a.** The PR head, 929d25f, passed all 6 checks.
+- **Rule:** when re-running a failed job, check that its commit is the PR's latest. Re-running an old commit only re-tests code that has already been replaced.
