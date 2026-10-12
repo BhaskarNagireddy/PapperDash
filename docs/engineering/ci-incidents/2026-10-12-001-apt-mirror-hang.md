@@ -68,3 +68,6 @@
   All 96 integration tests then passed. Without the retry, this run would have hung like CI #21.
 - **The mirror stalled in 2 of the 4 runs on 2026-10-12,** so it is unreliable often enough to matter.
 - **If it keeps happening:** cache the downloaded `.deb` files with `actions/cache`, keyed on the package version, so most runs never contact the mirror. The retry stays as the fallback.
+
+## Follow-up: recurrence and the lasting fix
+The mirror stalled again on `main` and defeated all 3 attempts. See [2026-10-12-005](2026-10-12-005-apt-mirror-on-main.md): LibreOffice packages are now cached between runs.
