@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   canTransition,
   selectedPages,
@@ -13,11 +13,13 @@ import {
   type PrintSettings,
   type Role,
 } from '@papperdash/contracts';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, lt } from 'drizzle-orm';
 import { Clock } from '../../platform/clock.js';
+import { APP_CONFIG, type AppConfig } from '../../platform/config.js';
 import { DB, type Db } from '../../platform/database.js';
 import { Outbox } from '../../platform/events.js';
 import { humanCode, newId } from '../../platform/ids.js';
+import { Leases } from '../../platform/leases.js';
 import { DocumentsService } from '../documents/index.js';
 import { PricingService } from '../pricing/index.js';
 import { orderStateHistory, orders } from './orders.schema.js';
@@ -25,6 +27,8 @@ import { orderStateHistory, orders } from './orders.schema.js';
 type OrderRow = typeof orders.$inferSelect;
 
 const STAFF_ROLES: Role[] = ['support', 'admin'];
+/** A draft nobody has paid for in a day is abandoned. Cancelling it lets its file be deleted on schedule. */
+export const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export class InvalidTransitionError extends ConflictException {
   constructor(from: OrderState, to: OrderState) {
@@ -33,14 +37,34 @@ export class InvalidTransitionError extends ConflictException {
 }
 
 @Injectable()
-export class OrdersService {
+export class OrdersService implements OnModuleInit, OnModuleDestroy {
+  private readonly log = new Logger(OrdersService.name);
+  private expiryTimer?: NodeJS.Timeout;
+
   constructor(
     @Inject(DB) private readonly db: Db,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly clock: Clock,
+    private readonly leases: Leases,
     private readonly outbox: Outbox,
     private readonly documents: DocumentsService,
     private readonly pricing: PricingService,
   ) {}
+
+  onModuleInit() {
+    if (this.config.expirySweepMs > 0)
+      this.expiryTimer = setInterval(
+        () =>
+          void this.leases
+            .runExclusive('draft-expiry', this.config.expirySweepMs, () => this.expireDrafts())
+            .catch((err) => this.log.error('Draft expiry failed', err)),
+        this.config.expirySweepMs,
+      );
+  }
+
+  onModuleDestroy() {
+    if (this.expiryTimer) clearInterval(this.expiryTimer);
+  }
 
   async create(user: CurrentUser, input: CreateOrderInput): Promise<OrderView> {
     if (!user.emailVerified) {
@@ -121,6 +145,44 @@ export class OrdersService {
     return this.transition(orderId, 'Cancelled', { kind: 'customer', userId: user.id });
   }
 
+  /** IDs of orders that have been in `state` since before `olderThan`, oldest first. For expiry jobs. */
+  async staleIds(state: OrderState, olderThan: Date, limit = 200): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.state, state), lt(orders.updatedAt, olderThan)))
+      .orderBy(asc(orders.updatedAt))
+      .limit(limit);
+    return rows.map((r) => r.id);
+  }
+
+  /** Cancels drafts older than DRAFT_TTL_MS. Returns how many were cancelled. */
+  async expireDrafts(): Promise<number> {
+    const cutoff = new Date(this.clock.now().getTime() - DRAFT_TTL_MS);
+    let cancelled = 0;
+    for (const id of await this.staleIds('Draft', cutoff)) {
+      if (await this.cancelIfUnchanged(id, 'Draft', { kind: 'system', block: 'orders' }, 'Not paid within 24 hours')) cancelled++;
+    }
+    return cancelled;
+  }
+
+  /**
+   * Cancels on behalf of the system unless the order moved on meanwhile (the customer paid or cancelled it
+   * themselves, or another instance got there first). Returns whether this call cancelled it.
+   */
+  async cancelIfUnchanged(orderId: string, expected: OrderState, actor: OrderActor, reason: string): Promise<boolean> {
+    try {
+      const current = await this.find(orderId);
+      if (current?.state !== expected) return false;
+      // Applied to the row just read: if it changes before the write, the version check rejects it.
+      await this.apply(current, 'Cancelled', actor, reason);
+      return true;
+    } catch (err) {
+      if (err instanceof ConflictException) return false;
+      throw err;
+    }
+  }
+
   /** Called by the pricing/payments flow once a quote is accepted: stores the total and waits for payment. */
   async awaitPayment(orderId: string, total: Money, actor: OrderActor): Promise<OrderView> {
     return this.transition(orderId, 'AwaitingPayment', actor, undefined, { totalMinor: total.amountMinor, currency: total.currency });
@@ -139,6 +201,17 @@ export class OrdersService {
   ): Promise<OrderView> {
     const current = await this.find(orderId);
     if (!current) throw new NotFoundException();
+    return this.apply(current, to, actor, reason, extra);
+  }
+
+  private async apply(
+    current: OrderRow,
+    to: OrderState,
+    actor: OrderActor,
+    reason?: string,
+    extra: Partial<Pick<OrderRow, 'totalMinor' | 'currency'>> = {},
+  ): Promise<OrderView> {
+    const orderId = current.id;
     const from = current.state as OrderState;
     if (!canTransition(from, to, current.fulfilment as FulfilmentMethod)) throw new InvalidTransitionError(from, to);
 

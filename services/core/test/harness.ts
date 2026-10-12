@@ -16,6 +16,7 @@ import { OAuthVerifier } from '../src/blocks/identity/index.js';
 import { EventBus } from '../src/platform/events.js';
 import { pdfWithPages } from './fixtures.js';
 import { Clock } from '../src/platform/clock.js';
+import { DEFAULT_RATE_LIMITS, type AppConfig } from '../src/platform/config.js';
 import type { Db } from '../src/platform/database.js';
 import type { EmailMessage, EmailProvider } from '@papperdash/contracts';
 import type { LoggerService } from '@nestjs/common';
@@ -100,8 +101,23 @@ async function testDatabase(): Promise<{ db: Db; close: () => Promise<void> }> {
   };
 }
 
+/**
+ * Tests sign up many users from one address, so request limits are generous here except the login lockout,
+ * which the identity tests rely on. Tests of a specific limit pass their own through `config`.
+ */
+const TEST_RATE_LIMITS: AppConfig['rateLimits'] = {
+  registerPerIp: { max: 1000, windowMs: 60 * 60 * 1000 },
+  resetPerEmail: { max: 1000, windowMs: 60 * 60 * 1000 },
+  resetPerIp: { max: 1000, windowMs: 60 * 60 * 1000 },
+  loginFailures: DEFAULT_RATE_LIMITS.loginFailures,
+  uploadsPerUser: { max: 1000, windowMs: 60 * 60 * 1000 },
+  qrPerStation: { max: 1000, windowMs: 60 * 60 * 1000 },
+};
+
 /** A full core app on a freshly migrated database. Pass `oauth` to replace the Google/Apple verifier. */
-export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Array<[unknown, unknown]>; logger?: LoggerService } = {}): Promise<Harness> {
+export async function startHarness(
+  opts: { oauth?: OAuthVerifier; overrides?: Array<[unknown, unknown]>; logger?: LoggerService; config?: Partial<AppConfig> } = {},
+): Promise<Harness> {
   const database = await testDatabase();
   const db = database.db;
   const clock = new FakeClock();
@@ -121,8 +137,12 @@ export async function startHarness(opts: { oauth?: OAuthVerifier; overrides?: Ar
           stripe: null,
           email: null,
           storage: null,
+          corsOrigins: ['http://localhost:3000'],
+          rateLimits: TEST_RATE_LIMITS,
           outboxPollMs: 0,
           retentionSweepMs: 0,
+          expirySweepMs: 0,
+          ...opts.config,
         },
       }),
     ],

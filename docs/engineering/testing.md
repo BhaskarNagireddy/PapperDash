@@ -15,8 +15,9 @@ Every change reaches `main` through a pull request. **Branch protection makes ev
 | **Unit** | `src/**/*.test.ts` (label `unit`), `packages/contracts/src/*.test.ts` | One function or adapter in isolation: the order state machine, retention rules, config safety checks, the Stripe adapter against a recorded fake of Stripe's API | Every PR, in seconds |
 | **Integration** | `services/core/test/*.test.ts` (label `integration`) | The real HTTP API on a freshly migrated database: sign-in, uploads, orders, payments, refunds, permissions between customers | Every PR, on in-memory PostgreSQL |
 | **Integration on real infrastructure** | Same tests, with `TEST_DATABASE_URL` and `S3_TEST_ENDPOINT` set | The same flows on PostgreSQL 16 (the production engine), and file uploads, downloads and deletes on S3 (MinIO) | Every PR |
+| **Multi-instance safety** | `test/hardening.e2e.test.ts` | Only the website origin passes CORS; request limits answer 429 (reset emails are capped silently); a second instance cannot run a job whose lease another holds, and takes over when it lapses; abandoned drafts and checkouts expire, never a Klarna payment still being confirmed, and a late payment is refunded | Every PR |
 | **Data exposure** | `test/data-exposure.e2e.test.ts` | No response or log line ever contains a password, hash, token, storage key, Stripe secret or another customer's data | Every PR |
-| **Container** | CI job "Docker image" | The production image builds, runs as non-root, applies migrations, reports ready, sends security headers, and refuses unsafe production settings | Every PR |
+| **Container** | CI job "Docker image" | The production image builds, runs as non-root, applies migrations, reports ready, sends security headers, allows only listed CORS origins, and refuses unsafe production settings | Every PR |
 | **End-to-end (browser)** | `apps/web/e2e` (with the website) | A real browser signs up, uploads, pays in the Stripe sandbox and tracks the order | Planned with the website |
 | **Load** | `tests/load` (before launch) | Response times and error rate at expected exam-week peak | Before launch, and before big changes |
 

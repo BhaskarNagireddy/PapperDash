@@ -224,6 +224,11 @@ jobs:
           echo "$headers"
           echo "$headers" | grep -qi '^x-content-type-options: nosniff'
           ! echo "$headers" | grep -qi '^x-powered-by'
+      - name: Lets only the listed website origins call the API from a browser (CORS)
+        run: |
+          preflight() { curl -si -X OPTIONS http://localhost:4000/v1/auth/login -H "Origin: $1" -H 'Access-Control-Request-Method: POST'; }
+          preflight http://localhost:3000 | grep -qi '^access-control-allow-origin: http://localhost:3000'
+          ! preflight https://evil.example | grep -qi '^access-control-allow-origin'
       - name: Refuses unsafe production settings
         run: |
           if docker run --rm --network host -e DATABASE_URL papperdash-core:ci > out.txt 2>&1; then

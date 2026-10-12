@@ -3,14 +3,12 @@ import { APP_CONFIG, type AppConfig } from '../../platform/config.js';
 import { RolesGuard, SessionGuard, StationGuard } from './auth.guards.js';
 import { IdentityController } from './identity.controller.js';
 import { IdentityService } from './identity.service.js';
-import { LoginThrottle } from './login-throttle.js';
 import { JoseOAuthVerifier, OAuthVerifier } from './oauth-verifier.js';
 
 @Module({
   controllers: [IdentityController],
   providers: [
     IdentityService,
-    LoginThrottle,
     SessionGuard,
     RolesGuard,
     StationGuard,

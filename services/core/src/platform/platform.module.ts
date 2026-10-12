@@ -5,6 +5,8 @@ import { APP_CONFIG, type AppConfig } from './config.js';
 import { DB, type Db } from './database.js';
 import { EMAIL_PROVIDER, LogEmailProvider } from './email.js';
 import { EventBus, Outbox } from './events.js';
+import { Leases } from './leases.js';
+import { RateLimiter } from './rate-limit.js';
 
 export interface PlatformOptions {
   db: Db;
@@ -27,8 +29,10 @@ export class PlatformModule {
         { provide: EMAIL_PROVIDER, useValue: opts.email ?? new LogEmailProvider() },
         Outbox,
         EventBus,
+        Leases,
+        RateLimiter,
       ],
-      exports: [DB, APP_CONFIG, Clock, EMAIL_PROVIDER, Outbox, EventBus],
+      exports: [DB, APP_CONFIG, Clock, EMAIL_PROVIDER, Outbox, EventBus, Leases, RateLimiter],
     };
   }
 }

@@ -9,6 +9,7 @@ const production = {
   S3_BUCKET: 'papperdash-documents',
   S3_KMS_KEY_ID: 'arn:aws:kms:eu-north-1:123456789012:key/abc',
   EMAIL_FROM: 'PapperDash <no-reply@papperdash.se>',
+  CORS_ORIGINS: 'https://papperdash.se, https://www.papperdash.se',
 };
 
 describe('loadConfig', () => {
@@ -16,6 +17,8 @@ describe('loadConfig', () => {
     const c = loadConfig(base);
     expect(c).toMatchObject({ port: 4000, cookieSecure: true, stripe: null, storage: null, email: null, stationKeys: {} });
     expect(c.oauthAudiences).toEqual({ google: [], apple: [] });
+    expect(c.corsOrigins).toEqual(['http://localhost:3000']);
+    expect(c.rateLimits.loginFailures).toEqual({ max: 5, windowMs: 15 * 60 * 1000 });
   });
 
   it('switches integrations on only when all their settings are present', () => {
@@ -41,7 +44,9 @@ describe('loadConfig', () => {
   });
 
   it('starts in production when every safety setting is present', () => {
-    expect(loadConfig(production).email).toMatchObject({ from: 'PapperDash <no-reply@papperdash.se>' });
+    const c = loadConfig(production);
+    expect(c.email).toMatchObject({ from: 'PapperDash <no-reply@papperdash.se>' });
+    expect(c.corsOrigins).toEqual(['https://papperdash.se', 'https://www.papperdash.se']);
   });
 
   it.each([
@@ -50,6 +55,10 @@ describe('loadConfig', () => {
     ['encryption key', { S3_KMS_KEY_ID: undefined }, /S3_KMS_KEY_ID/],
     ['email sender (else reset links would be logged)', { EMAIL_FROM: undefined }, /EMAIL_FROM/],
     ['https site', { PUBLIC_WEB_URL: 'http://www.papperdash.se' }, /https/],
+    ['website origins for CORS', { CORS_ORIGINS: undefined }, /CORS_ORIGINS is required/],
+    ['a CORS wildcard', { CORS_ORIGINS: '*' }, /exact https origins/],
+    ['plain-http CORS origins', { CORS_ORIGINS: 'http://papperdash.se' }, /exact https origins/],
+    ['CORS origins with a path', { CORS_ORIGINS: 'https://papperdash.se/app' }, /exact https origins/],
   ])('refuses to start in production without %s', (_name, change, message) => {
     const env = { ...production, ...change };
     expect(() => loadConfig(env as NodeJS.ProcessEnv)).toThrow(UnsafeProductionConfigError);

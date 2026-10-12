@@ -5,6 +5,7 @@ import { APP_CONFIG, type AppConfig } from './config.js';
 import { Clock } from './clock.js';
 import { DB, type Db, type DbOrTx, type Tx } from './database.js';
 import { newId } from './ids.js';
+import { Leases } from './leases.js';
 import { outbox, processedEvents } from './platform.schema.js';
 
 type NewEvent<E extends DomainEvent> = Omit<E, 'id' | 'occurredAt'>;
@@ -48,11 +49,16 @@ export interface SubscribeOptions {
 }
 
 const MAX_ATTEMPTS = 10;
+const RELAY_LEASE = 'outbox-relay';
+/** Long enough for any single handler; if the holder dies, another instance takes over after this. */
+const RELAY_LEASE_MS = 60_000;
 
 /**
  * Delivers outbox events to subscribers, at least once, in order.
  * Each subscriber runs in its own transaction together with its processed-event marker,
  * so a handler never runs twice for the same event and a failing handler does not block others.
+ * Only the instance holding the relay lease delivers, so running several instances never processes an
+ * event twice at the same time (which could, for example, refund a payment twice).
  * Transport is in-process today; moving to SQS/EventBridge replaces only this class.
  */
 @Injectable()
@@ -66,6 +72,7 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
     @Inject(DB) private readonly db: Db,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly clock: Clock,
+    private readonly leases: Leases,
   ) {}
 
   /** `consumer` must be stable and unique per handler, e.g. "notifications.order-ready". */
@@ -80,15 +87,17 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
     if (this.config.outboxPollMs > 0) this.timer = setInterval(() => void this.flush(), this.config.outboxPollMs);
   }
 
-  onModuleDestroy() {
+  async onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+    if (this.config.outboxPollMs > 0) await this.leases.release(RELAY_LEASE).catch(() => undefined);
   }
 
-  /** Publishes pending events. Returns how many were published. */
+  /** Publishes pending events. Returns how many were published (0 when another instance holds the relay). */
   async flush(batchSize = 100): Promise<number> {
     if (this.running) return 0;
     this.running = true;
     try {
+      if (!(await this.leases.tryAcquire(RELAY_LEASE, RELAY_LEASE_MS))) return 0;
       const rows = await this.db
         .select()
         .from(outbox)
@@ -99,8 +108,10 @@ export class EventBus implements OnModuleInit, OnModuleDestroy {
       // Events of one aggregate stay in order: after a failure, that aggregate's later events wait for the retry.
       // Other aggregates carry on, so one failing event never blocks unrelated work.
       const blocked = new Set<string>();
-      for (const row of rows) {
+      for (const [i, row] of rows.entries()) {
         if (blocked.has(row.aggregateId)) continue;
+        // Renew before each event; stop if another instance took over while a slow handler ran.
+        if (i > 0 && !(await this.leases.tryAcquire(RELAY_LEASE, RELAY_LEASE_MS))) break;
         const event: DomainEvent = {
           id: row.id,
           type: row.type,

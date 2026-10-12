@@ -43,6 +43,13 @@
       "when": 1790553034674,
       "tag": "0005_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791798254665,
+      "tag": "0006_leases_and_rate_limits",
+      "breakpoints": true
     }
   ]
 }
