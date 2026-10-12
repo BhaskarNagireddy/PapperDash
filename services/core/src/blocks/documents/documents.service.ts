@@ -21,6 +21,7 @@ import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EventBus, Outbox } from '../../platform/events.js';
 import { newId } from '../../platform/ids.js';
 import { Leases } from '../../platform/leases.js';
+import { PeriodicJob } from '../../platform/periodic.js';
 import { RateLimiter } from '../../platform/rate-limit.js';
 import { PricingService } from '../pricing/index.js';
 import { documentOrders, documents } from './documents.schema.js';
@@ -36,7 +37,7 @@ const PRINT_URL_TTL_SEC = 5 * 60;
 @Injectable()
 export class DocumentsService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(DocumentsService.name);
-  private sweepTimer?: NodeJS.Timeout;
+  private readonly sweepJob = new PeriodicJob('Retention sweep', this.log);
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -60,19 +61,12 @@ export class DocumentsService implements OnModuleInit, OnModuleDestroy {
     this.bus.subscribe<OrderStateChanged>('orders.OrderStateChanged', 'documents.order-state', (e, tx) =>
       this.trackOrder(tx, null, e.payload.orderId, e.payload.to, new Date(e.occurredAt)),
     );
-    // One instance sweeps per interval; the lease outlives the interval so others skip rather than repeat it.
-    if (this.config.retentionSweepMs > 0)
-      this.sweepTimer = setInterval(
-        () =>
-          void this.leases
-            .runExclusive('document-retention', this.config.retentionSweepMs, () => this.sweep())
-            .catch((err) => this.log.error('Retention sweep failed', err)),
-        this.config.retentionSweepMs,
-      );
+    // One instance runs it per interval; the lease outlives the interval so others skip rather than repeat it.
+    this.sweepJob.start(this.config.retentionSweepMs, () => this.leases.runExclusive('document-retention', this.config.retentionSweepMs, () => this.sweep()));
   }
 
   onModuleDestroy() {
-    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    return this.sweepJob.stop();
   }
 
   // ---------- Customer: upload ----------

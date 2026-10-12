@@ -20,6 +20,7 @@ import { DB, type Db } from '../../platform/database.js';
 import { Outbox } from '../../platform/events.js';
 import { humanCode, newId } from '../../platform/ids.js';
 import { Leases } from '../../platform/leases.js';
+import { PeriodicJob } from '../../platform/periodic.js';
 import { DocumentsService } from '../documents/index.js';
 import { PricingService } from '../pricing/index.js';
 import { orderStateHistory, orders } from './orders.schema.js';
@@ -39,7 +40,7 @@ export class InvalidTransitionError extends ConflictException {
 @Injectable()
 export class OrdersService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(OrdersService.name);
-  private expiryTimer?: NodeJS.Timeout;
+  private readonly expiryJob = new PeriodicJob('Draft expiry', this.log);
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -52,18 +53,12 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    if (this.config.expirySweepMs > 0)
-      this.expiryTimer = setInterval(
-        () =>
-          void this.leases
-            .runExclusive('draft-expiry', this.config.expirySweepMs, () => this.expireDrafts())
-            .catch((err) => this.log.error('Draft expiry failed', err)),
-        this.config.expirySweepMs,
-      );
+    // One instance runs it per interval; the lease outlives the interval so others skip rather than repeat it.
+    this.expiryJob.start(this.config.expirySweepMs, () => this.leases.runExclusive('draft-expiry', this.config.expirySweepMs, () => this.expireDrafts()));
   }
 
   onModuleDestroy() {
-    if (this.expiryTimer) clearInterval(this.expiryTimer);
+    return this.expiryJob.stop();
   }
 
   async create(user: CurrentUser, input: CreateOrderInput): Promise<OrderView> {

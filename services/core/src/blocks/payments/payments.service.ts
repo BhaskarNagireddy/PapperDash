@@ -26,6 +26,7 @@ import { DB, type Db, type DbOrTx } from '../../platform/database.js';
 import { EventBus, Outbox } from '../../platform/events.js';
 import { newId } from '../../platform/ids.js';
 import { Leases } from '../../platform/leases.js';
+import { PeriodicJob } from '../../platform/periodic.js';
 import { OrdersService } from '../orders/index.js';
 import { payments, refunds, webhookEvents } from './payments.schema.js';
 
@@ -48,7 +49,7 @@ export const ABANDONED_CHECKOUT_MS = 2 * 60 * 60 * 1000;
 @Injectable()
 export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(PaymentsService.name);
-  private expiryTimer?: NodeJS.Timeout;
+  private readonly expiryJob = new PeriodicJob('Checkout expiry', this.log);
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -75,18 +76,12 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       },
       own,
     );
-    if (this.config.expirySweepMs > 0)
-      this.expiryTimer = setInterval(
-        () =>
-          void this.leases
-            .runExclusive('checkout-expiry', this.config.expirySweepMs, () => this.expireAbandonedCheckouts())
-            .catch((err) => this.log.error('Checkout expiry failed', err)),
-        this.config.expirySweepMs,
-      );
+    // One instance runs it per interval; the lease outlives the interval so others skip rather than repeat it.
+    this.expiryJob.start(this.config.expirySweepMs, () => this.leases.runExclusive('checkout-expiry', this.config.expirySweepMs, () => this.expireAbandonedCheckouts()));
   }
 
   onModuleDestroy() {
-    if (this.expiryTimer) clearInterval(this.expiryTimer);
+    return this.expiryJob.stop();
   }
 
   /**

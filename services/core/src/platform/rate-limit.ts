@@ -4,6 +4,7 @@ import { Clock } from './clock.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
 import { DB, type Db } from './database.js';
 import { Leases } from './leases.js';
+import { PeriodicJob } from './periodic.js';
 import { rateLimits } from './platform.schema.js';
 
 export interface Limit {
@@ -25,7 +26,7 @@ export class RateLimitedException extends HttpException {
 @Injectable()
 export class RateLimiter implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(RateLimiter.name);
-  private timer?: NodeJS.Timeout;
+  private readonly pruning = new PeriodicJob('Rate limit prune', this.log);
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -36,18 +37,12 @@ export class RateLimiter implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     // Windows are at most an hour long; anything older than a day is dead weight.
-    if (this.config.expirySweepMs > 0)
-      this.timer = setInterval(
-        () =>
-          void this.leases
-            .runExclusive('rate-limit-prune', this.config.expirySweepMs, () => this.prune(new Date(this.clock.now().getTime() - 24 * 60 * 60 * 1000)))
-            .catch((err) => this.log.error('Rate limit prune failed', err)),
-        this.config.expirySweepMs,
-      );
+    const dayAgo = () => new Date(this.clock.now().getTime() - 24 * 60 * 60 * 1000);
+    this.pruning.start(this.config.expirySweepMs, () => this.leases.runExclusive('rate-limit-prune', this.config.expirySweepMs, () => this.prune(dayAgo())));
   }
 
   onModuleDestroy() {
-    if (this.timer) clearInterval(this.timer);
+    return this.pruning.stop();
   }
 
   /** Counts one request; returns whether it is within the limit and when the window resets. */

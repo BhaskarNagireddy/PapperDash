@@ -67,3 +67,5 @@ Commands run and results, locally and in CI.
 | ID | Date | Check | Category | Summary | Status |
 | --- | --- | --- | --- | --- | --- |
 | [2026-10-12-001](2026-10-12-001-apt-mirror-hang.md) | 2026-10-12 | Integration tests on PostgreSQL 16 and S3 (MinIO) | infrastructure, cancelled | LibreOffice install hung on the Ubuntu mirror for 12 min; no test ran; cancelled by a newer push | fixed |
+| [2026-10-12-002](2026-10-12-002-shutdown-race-unhandled-rejection.md) | 2026-10-12 | Integration tests on PostgreSQL 16 and S3 (MinIO) | test-failure (real bug) | A timer-started relay flush kept querying after shutdown closed the pool; unhandled rejection that would crash production. Fixed with `PeriodicJob` | fixed |
+| [2026-10-12-003](2026-10-12-003-flush-returned-early.md) | 2026-10-12 | (local) PostgreSQL 16 suite | test-bug, flaky | `flush()` returned 0 while the timer was flushing, so a test read a document before it was processed. Flushes now queue | fixed |

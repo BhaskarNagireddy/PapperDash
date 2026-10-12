@@ -267,3 +267,20 @@ describe('background jobs on their production timers', () => {
     }
   });
 });
+
+describe('shutdown', () => {
+  // Regression for CI incident 2026-10-12-002: a timer-started job was still querying when the app closed and
+  // the database pool was ended, which surfaced as an unhandled rejection (in production, a crashed process).
+  it('waits for running background jobs before the database closes', async () => {
+    for (let i = 0; i < 5; i++) {
+      const h = await startHarness({ config: { outboxPollMs: 1, expirySweepMs: 1, retentionSweepMs: 1 } });
+      // Queue events so the relay is mid-way through a batch, then close straight away.
+      await Promise.all(
+        [1, 2, 3, 4].map((n) =>
+          h.http().post('/v1/auth/register').send({ email: `shutdown${i}-${n}@example.se`, password: 'correct horse battery', locale: 'en' }).expect(201),
+        ),
+      );
+      await h.close();
+    }
+  });
+});
