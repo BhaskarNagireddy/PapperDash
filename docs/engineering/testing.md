@@ -91,3 +91,6 @@ A repository admin does this once in GitHub. The quickest way is to import [`.gi
    - `Docker image (build, boot, vulnerability scan)`
 4. Turn on **Require conversation resolution before merging** and **Do not allow bypassing the above settings** (this applies the rule to admins too).
 5. Leave force pushes and branch deletion **off**.
+
+## When a check fails or is cancelled
+Every CI failure that isn't simply fixed by the PR's next commit is recorded in the [CI incident log](ci-incidents/README.md): what was seen, the root cause, the modules affected, the fix and how it was verified. Check the log first when a re-run fails, because the same cause may already be documented.

@@ -53,7 +53,7 @@ jobs:
   tests:
     name: Unit and integration tests with coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: write # coverage report comment on the PR
@@ -63,9 +63,9 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
       - name: Install LibreOffice Writer (Word-to-PDF conversion tests)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer-nogui
+        # Retries a stalled package mirror instead of hanging (docs/engineering/ci-incidents/2026-10-12-001).
+        timeout-minutes: 15
+        run: .github/scripts/install-libreoffice.sh
       - run: pnpm install --frozen-lockfile
       - name: Run all tests with coverage (fails below the minimum coverage)
         run: pnpm test:coverage
@@ -98,7 +98,7 @@ jobs:
   integration-postgres:
     name: Integration tests on PostgreSQL 16 and S3 (MinIO)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       # Throwaway database that exists only inside this job's runner (localhost) and is deleted when the job ends.
       # Its password is not a secret: nothing outside the runner can reach it. Service containers start before
@@ -150,10 +150,10 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
-      - name: Install LibreOffice Writer
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer-nogui
+      - name: Install LibreOffice Writer (Word-to-PDF conversion tests)
+        # Retries a stalled package mirror instead of hanging (docs/engineering/ci-incidents/2026-10-12-001).
+        timeout-minutes: 15
+        run: .github/scripts/install-libreoffice.sh
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @papperdash/contracts build
       - name: Integration tests against PostgreSQL 16 and MinIO
