@@ -7,6 +7,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Twice a week on main: keeps the LibreOffice package cache in use (GitHub evicts caches unused for 7 days,
+  # incident 2026-11-03-002) and finds new dependency advisories and runner image changes before a PR does.
+  schedule:
+    - cron: '17 4 * * 1,4'
+  workflow_dispatch:
 
 # Least privilege: jobs only read the repository unless they say otherwise.
 permissions:
@@ -55,7 +60,7 @@ jobs:
   tests:
     name: Unit and integration tests with coverage
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     permissions:
       contents: read
       pull-requests: write # coverage report comment on the PR
@@ -77,7 +82,7 @@ jobs:
           key: ${{ steps.lo-key.outputs.key }}
           restore-keys: libreoffice-
       - name: Install LibreOffice Writer (Word-to-PDF conversion tests)
-        timeout-minutes: 15
+        timeout-minutes: 26
         run: .github/scripts/install-libreoffice.sh
       - name: Save LibreOffice packages for the next run
         if: steps.lo-cache.outputs.cache-hit != 'true'
@@ -117,7 +122,7 @@ jobs:
   integration-postgres:
     name: Integration tests on PostgreSQL 16 and S3 (MinIO)
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     services:
       # Throwaway database that exists only inside this job's runner (localhost) and is deleted when the job ends.
       # Its password is not a secret: nothing outside the runner can reach it. Service containers start before
@@ -182,7 +187,7 @@ jobs:
           key: ${{ steps.lo-key.outputs.key }}
           restore-keys: libreoffice-
       - name: Install LibreOffice Writer (Word-to-PDF conversion tests)
-        timeout-minutes: 15
+        timeout-minutes: 26
         run: .github/scripts/install-libreoffice.sh
       - name: Save LibreOffice packages for the next run
         if: steps.lo-cache.outputs.cache-hit != 'true'
