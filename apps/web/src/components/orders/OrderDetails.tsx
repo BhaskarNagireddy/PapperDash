@@ -1,6 +1,7 @@
 'use client';
 
-import type { Locale, OrderView, PaymentView } from '@papperdash/contracts';
+import { isOrderActive, type Locale, type OrderView, type PaymentView } from '@papperdash/contracts';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Notice } from '@/components/forms/Field';
@@ -15,12 +16,15 @@ import { fill } from '@/lib/errors';
 import { formatMoney } from '@/lib/money';
 import { useSession } from '@/lib/session';
 import styles from './orders.module.css';
+import { Tracking } from './Tracking';
 
 type T = Pick<Messages, 'order' | 'print' | 'errors'>;
 type Load = { kind: 'loading' } | { kind: 'missing' } | { kind: 'error' } | { kind: 'ready'; order: OrderView; payment: PaymentView | null };
 
 /** How long to keep asking after Stripe sends the customer back, before saying it takes longer than usual. */
 const CONFIRM_POLLS = 30;
+/** While an order moves by itself (printing, delivery), the page refreshes this often. */
+const TRACK_EVERY_MS = 15_000;
 
 /**
  * One order: its status, what was ordered and what it costs. Stripe returns the customer here with
@@ -69,6 +73,14 @@ export function OrderDetails({ locale, id, t }: { locale: Locale; id: string; t:
     return () => clearTimeout(timer);
   }, [waiting, polls, refresh]);
 
+  // Keep an order on its way up to date without a reload.
+  const tracking = load.kind === 'ready' && !waiting && isOrderActive(load.order.state) && load.order.state !== 'AwaitingPayment';
+  useEffect(() => {
+    if (!tracking) return;
+    const timer = setInterval(() => void refresh(), TRACK_EVERY_MS);
+    return () => clearInterval(timer);
+  }, [tracking, refresh]);
+
   if (load.kind === 'loading') return <p className="muted">{t.order.loading}</p>;
   if (load.kind === 'missing') return <Notice tone="error">{t.order.notFound}</Notice>;
   if (load.kind === 'error') return <Notice tone="error">{t.errors.generic}</Notice>;
@@ -96,8 +108,19 @@ export function OrderDetails({ locale, id, t }: { locale: Locale; id: string; t:
           <Notice tone="info">{t.order.checkoutCancelled}</Notice>
         ) : order.state === 'Cancelled' ? (
           <Notice tone="info">{t.order.cancelled}</Notice>
+        ) : order.state === 'SupportRequired' ? (
+          <Notice tone="info">{t.order.support}</Notice>
+        ) : order.state === 'Failed' ? (
+          <Notice tone="info">{t.order.failed}</Notice>
+        ) : order.state === 'DeliveryFailed' ? (
+          <Notice tone="info">{t.order.deliveryFailed}</Notice>
+        ) : order.state === 'Refunded' ? (
+          <Notice tone="info">{t.order.refunded}</Notice>
         ) : null}
       </div>
+
+      <Tracking fulfilment={order.fulfilment} state={order.state} locale={locale} title={t.order.trackingTitle} />
+
 
       <dl className={styles.details}>
         <div>
@@ -155,6 +178,9 @@ export function OrderDetails({ locale, id, t }: { locale: Locale; id: string; t:
             {t.order.newOrder}
           </ButtonLink>
         )}
+      </div>
+      <div className={forms.links}>
+        <Link href={`/${locale}/orders`}>{t.order.allOrders}</Link>
       </div>
     </div>
   );

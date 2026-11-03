@@ -37,7 +37,16 @@ Core already had Stripe Checkout (ADR 0007): `POST /v1/orders/:id/checkout`, sig
   - upload a real PDF → "Beställ och betala" → the test checkout shows 10,00 kr → pay → the order page says **Betald**;
   - leaving the payment page, then cancelling, shows **Avbruten**.
 
+## Order history and tracking (added in the follow-up PR)
+- **"Dina beställningar"** (`/sv/orders`) lists the customer's orders, newest first, with status and total. Each row is named by its visible text (WCAG 2.5.3).
+- **The order page shows the milestones** for its way of reaching the customer, from `orderTracking()` and `TRACKING_STEPS` in `@papperdash/contracts`, so the app will show the same:
+  - print at the station: Betald → Skrivs ut → Utskriven → Hämtad;
+  - locker: … → Redo att hämta → Hämtad;
+  - delivery: … → Väntar på bud → Ute för leverans → Levererad.
+  The current step is marked with `aria-current="step"`.
+- **While an order is on its way,** the page refreshes every 15 s.
+- **Off the normal path** (support, failed print, failed delivery, refunded, cancelled), the page explains what happens instead of showing progress.
+
 ## Next
-- **Order history:** a list of the customer's orders.
 - **Legal pages and account settings**, including deleting the account.
 - **Real Stripe test mode:** set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in staging, and follow the ADR 0007 checklist before live mode.

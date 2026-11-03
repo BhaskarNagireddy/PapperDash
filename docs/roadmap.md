@@ -42,7 +42,7 @@ Each step is its own pull request with its own tests, merged only when every che
    - print settings and the fulfilment choice: print here, store in a locker at a chosen station, or delivery (done; stations come from the new stations directory, ADR 0013).
 3. **Website part 2:**
    - checkout (redirect to Stripe) and the return page (done, ADR 0014);
-   - order tracking (Printing, Printed, In locker / Waiting for courier, Collected by courier, Delivered) and order history;
+   - order tracking (Printing, Printed, In locker / Waiting for courier, Collected by courier, Delivered) and order history (done: milestones per pick-up way from `orderTracking()` in the contracts, live updates while an order moves, "Dina beställningar");
    - account settings, privacy policy and terms;
    - the QR link landing page (open the app, or go to the app stores);
    - browser tests (Playwright) for each flow, run in CI.

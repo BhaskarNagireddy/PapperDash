@@ -71,6 +71,9 @@ export function AccountView({ locale, t }: { locale: Locale; t: T }) {
 
       <div className={styles.actions}>
         <ButtonLink href={`/${locale}/print`}>{t.account.print}</ButtonLink>
+        <ButtonLink href={`/${locale}/orders`} variant="secondary">
+          {t.account.orders}
+        </ButtonLink>
       </div>
 
       {logout.error.form ? <Notice tone="error">{logout.error.form}</Notice> : null}
