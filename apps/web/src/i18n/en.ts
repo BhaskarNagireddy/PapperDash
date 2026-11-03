@@ -153,6 +153,7 @@ export const en = {
     orderingClosed: 'Ordering opens with our first station in Lund. We will email you when it does.',
     logout: 'Log out',
     print: 'Print a document',
+    orders: 'Your orders',
   },
   print: {
     title: 'Print a document',
@@ -242,6 +243,18 @@ export const en = {
     cancel: 'Cancel order',
     cancelled: 'This order is cancelled. Nothing was charged.',
     newOrder: 'Print another document',
+    trackingTitle: 'Where your order is',
+    support: 'Our support team is looking at your order and will contact you.',
+    failed: 'Printing failed. We are printing it again or our support team will contact you.',
+    deliveryFailed: 'The delivery did not go through. Our support team will contact you.',
+    refunded: 'This order is refunded. The money is returned to your card or Klarna.',
+    allOrders: 'All your orders',
+  },
+  orders: {
+    title: 'Your orders',
+    loading: 'Loading your orders…',
+    empty: 'You have no orders yet.',
+    placed: 'Ordered {date}',
   },
   notFound: {
     title: 'Page not found',

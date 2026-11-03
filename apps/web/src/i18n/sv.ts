@@ -155,6 +155,7 @@ export const sv: Messages = {
     orderingClosed: 'Beställningar öppnar med vår första station i Lund. Vi mejlar dig när det sker.',
     logout: 'Logga ut',
     print: 'Skriv ut ett dokument',
+    orders: 'Dina beställningar',
   },
   print: {
     title: 'Skriv ut ett dokument',
@@ -244,6 +245,18 @@ export const sv: Messages = {
     cancel: 'Avbryt beställningen',
     cancelled: 'Beställningen är avbruten. Inget har dragits.',
     newOrder: 'Skriv ut ett till dokument',
+    trackingTitle: 'Var din beställning är',
+    support: 'Vår support tittar på din beställning och hör av sig till dig.',
+    failed: 'Utskriften misslyckades. Vi skriver ut den igen, annars hör supporten av sig.',
+    deliveryFailed: 'Leveransen gick inte fram. Vår support hör av sig till dig.',
+    refunded: 'Beställningen är återbetald. Pengarna går tillbaka till ditt kort eller Klarna.',
+    allOrders: 'Alla dina beställningar',
+  },
+  orders: {
+    title: 'Dina beställningar',
+    loading: 'Hämtar dina beställningar…',
+    empty: 'Du har inga beställningar än.',
+    placed: 'Beställd {date}',
   },
   notFound: {
     title: 'Sidan finns inte',

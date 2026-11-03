@@ -135,8 +135,14 @@ test('order and pay: the test checkout pays through the real webhook code and th
   // Back on the order page, which waits for the webhook's effect on the order.
   await expect(page).toHaveURL(/\/sv\/orders\/ord_[A-Z0-9]+$/);
   await expect(page.getByText('Tack. Din betalning är klar.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Betald', { exact: true })).toBeVisible();
+  await expect(page.locator('dl').getByText('Betald', { exact: true })).toBeVisible();
   await expect(page.getByTestId('order-total')).toHaveText(/10,00\s*kr/);
+  await expect(page.getByRole('region', { name: 'Var din beställning är' }).getByRole('listitem').first()).toHaveAttribute('aria-current', 'step');
+
+  // The order is in the customer's history, paid.
+  await page.getByRole('link', { name: 'Alla dina beställningar' }).click();
+  await expect(page.getByRole('main').getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('main').getByRole('listitem').first()).toContainText('Betald');
 });
 
 test('leave the payment page without paying, then cancel the order', async ({ page }) => {

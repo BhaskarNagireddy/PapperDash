@@ -166,3 +166,34 @@ export type OrderStateChanged = DomainEvent<
   { orderId: string; from: OrderState; to: OrderState; actor: OrderActor; reason?: string }
 >;
 export type OrderEvent = OrderCreated | OrderStateChanged;
+
+// ---------- Tracking: where an order is on its way to the customer ----------
+
+/** The milestones a customer sees for each way of getting the printout (ADR 0010). */
+export const TRACKING_STEPS: Readonly<Record<FulfilmentMethod, readonly OrderState[]>> = {
+  'walk-up': ['Paid', 'Printing', 'Printed', 'Collected'],
+  locker: ['Paid', 'Printing', 'Ready', 'Collected'],
+  delivery: ['Paid', 'Printing', 'ReadyForCourier', 'OutForDelivery', 'Delivered'],
+};
+
+/** States that count as reaching a milestone: Queued is part of printing, Completed is after the last step. */
+const MILESTONE_OF: Partial<Record<OrderState, OrderState>> = { Queued: 'Printing' };
+
+export type TrackingStep = { state: OrderState; status: 'done' | 'current' | 'upcoming' };
+
+/**
+ * The customer's progress view of an order, or null when it is not on its normal path: not paid yet, cancelled,
+ * refunded, or with support (the page then shows the status and an explanation instead).
+ */
+export function orderTracking(fulfilment: FulfilmentMethod, state: OrderState): TrackingStep[] | null {
+  const steps = TRACKING_STEPS[fulfilment];
+  const finished = state === 'Completed';
+  const at = steps.indexOf(MILESTONE_OF[state] ?? state);
+  if (!finished && at < 0) return null;
+  return steps.map((s, i) => ({ state: s, status: finished || i < at ? 'done' : i === at ? (i === steps.length - 1 ? 'done' : 'current') : 'upcoming' }));
+}
+
+/** Orders that can still change by themselves, so a page showing them should keep itself up to date. */
+export function isOrderActive(state: OrderState): boolean {
+  return !TERMINAL_STATES.includes(state) && state !== 'Draft' && state !== 'SupportRequired';
+}

@@ -36,7 +36,7 @@ test.describe('checkout and the order page', () => {
     await page.goto('/sv/orders/ord_1?checkout=success');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beställning PD-7K3M9Q');
     await expect(page.getByText('Tack. Din betalning är klar.')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Betald', { exact: true })).toBeVisible();
+    await expect(page.locator('dl').getByText('Betald', { exact: true })).toBeVisible();
     await expect(page.getByTestId('order-total')).toHaveText(/16,00\s*kr/);
     await expect(page.getByText('3 sidor × 2 kopior')).toBeVisible();
     expect(page.url()).not.toContain('checkout=');

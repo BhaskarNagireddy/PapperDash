@@ -136,3 +136,21 @@ describe('uploading without S3 (development and CI)', () => {
     }
   });
 });
+
+describe('order history', () => {
+  it('lists only the customer’s own orders, newest first', async () => {
+    const anna = await signUp(h, 'history-anna@example.se');
+    const bo = await signUp(h, 'history-bo@example.se');
+    const place = async (token: string) => {
+      const doc = await readyDocument(h, token, 2);
+      return (await h.http().post('/v1/orders').set('Authorization', bearer(token)).send({ documentId: doc, settings: settings(), fulfilment: 'delivery' }).expect(201)).body.id as string;
+    };
+    const first = await place(anna.token);
+    h.clock.advance(1000);
+    const second = await place(anna.token);
+    await place(bo.token);
+    const res = await h.http().get('/v1/orders').set('Authorization', bearer(anna.token)).expect(200);
+    expect(res.body.orders.map((o: { id: string }) => o.id)).toEqual([second, first]);
+    await h.http().get('/v1/orders').expect(401);
+  });
+});
