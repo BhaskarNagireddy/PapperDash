@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { STATION_ID_RE, type FulfilmentMethod, type StationView, type UpsertStationInput } from '@papperdash/contracts';
+import { isStationId, type FulfilmentMethod, type StationView, type UpsertStationInput } from '@papperdash/contracts';
 import { asc, eq } from 'drizzle-orm';
 import { Clock } from '../../platform/clock.js';
 import { DB, type Db } from '../../platform/database.js';
@@ -22,7 +22,7 @@ export class StationsService {
 
   /** Admin: add or change a station. */
   async upsert(id: string, input: UpsertStationInput): Promise<StationView & { active: boolean }> {
-    if (!STATION_ID_RE.test(id) || id.length > 64) throw new BadRequestException({ error: 'invalid_station_id', message: 'Use a short ID like "lund-central-1".' });
+    if (!isStationId(id)) throw new BadRequestException({ error: 'invalid_station_id', message: 'Use a short ID like "lund-central-1".' });
     const now = this.clock.now();
     const [row] = await this.db
       .insert(stations)

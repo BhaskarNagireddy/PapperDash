@@ -23,5 +23,11 @@ export const UpsertStationInput = z.object({
 });
 export type UpsertStationInput = z.infer<typeof UpsertStationInput>;
 
-/** Station IDs are short, stable slugs such as "lund-central-1". */
-export const STATION_ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+/**
+ * Station IDs are short, stable slugs such as "lund-central-1": lower-case letters and digits in parts joined by
+ * single hyphens, at most 64 characters. Checked without a regular expression, so no input can make it slow.
+ */
+export function isStationId(id: string): boolean {
+  if (id.length < 1 || id.length > 64) return false;
+  return id.split('-').every((part) => part.length > 0 && [...part].every((c) => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')));
+}
