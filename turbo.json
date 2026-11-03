@@ -6,13 +6,7 @@
         "^build"
       ],
       "outputs": [
-        "dist/**",
-        ".next/**",
-        "!.next/cache/**"
-      ],
-      "env": [
-        "CORE_URL",
-        "PUBLIC_WEB_URL"
+        "dist/**"
       ]
     },
     "typecheck": {

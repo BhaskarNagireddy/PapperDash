@@ -17,7 +17,7 @@ _Last updated 2026-10-12._
 | Backend hardening | Done | Website access (CORS allowlist), one background worker across instances (leases), shared request limits, expiry of abandoned orders ([ADR 0009](decisions/0009-coordination-in-postgresql.md)) |
 | Payments | Done | Stripe Checkout (card, Apple Pay, Google Pay, Klarna), webhooks, refunds, Stripe Tax switch (off) |
 | Quality | Done | 120+ unit and integration tests, coverage minimums, real PostgreSQL and S3 tests, data-leak tests, security scans, Docker image checks |
-| **Website** | **In progress** | Foundations: Next.js, sv/en, design tokens, components, browser tests ([ADR 0011](decisions/0011-website-architecture.md)) |
+| **Website** | **Next** | — |
 | **AWS environment** | **Next** | — |
 | Notifications | Not started | Order status emails and SMS |
 | Admin console | Not started | Orders, refunds, prices for staff |

@@ -195,33 +195,6 @@ jobs:
       - name: Integration tests against PostgreSQL 16 and MinIO
         run: pnpm --filter @papperdash/core test:integration
 
-  web:
-    name: Website (build, unit and browser tests)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with: { node-version-file: .nvmrc, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - name: Build the website and the packages it uses
-        run: pnpm turbo run build --filter=@papperdash/web...
-      - name: Unit tests (translations, locale routing, API client)
-        run: pnpm --filter @papperdash/web test
-      # Browser tests in Chrome (desktop) and a phone viewport: language, accessibility (axe, WCAG 2.2 AA),
-      # phone layout and security headers. Uses the Google Chrome preinstalled on the runner: nothing downloaded.
-      - name: Browser tests (Playwright)
-        working-directory: apps/web
-        run: pnpm exec playwright test
-      - name: Keep the browser test report
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-          retention-days: 14
-
   security:
     name: Security scans (secrets, code, dependencies)
     runs-on: ubuntu-24.04
