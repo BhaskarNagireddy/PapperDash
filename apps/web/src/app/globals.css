@@ -1,0 +1,51 @@
+@import '@papperdash/design-tokens/tokens.css';
+
+/* The design system names "Hanken Grotesk" and "JetBrains Mono"; next/font serves them under hashed names. */
+:root {
+  --font-family-sans: var(--font-hanken), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-family-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', Menlo, monospace;
+  --page-max: 1080px;
+  --text-max: 64ch;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body-family);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  font-weight: var(--font-body-weight);
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: var(--text-max); }
+img, svg { max-width: 100%; }
+
+a { color: var(--color-info); text-underline-offset: 3px; }
+
+/* One focus style everywhere: the design system's 2px info ring, offset 2px. */
+:focus-visible { outline: 2px solid var(--color-info); outline-offset: 2px; }
+
+.display { font-size: var(--font-display-size); line-height: var(--font-display-line-height); font-weight: var(--font-display-weight); letter-spacing: var(--font-display-letter-spacing); }
+.title { font-size: var(--font-title-size); line-height: var(--font-title-line-height); font-weight: var(--font-title-weight); }
+.heading { font-size: var(--font-heading-size); line-height: var(--font-heading-line-height); font-weight: var(--font-heading-weight); }
+.small { font-size: var(--font-small-size); line-height: var(--font-small-line-height); font-weight: var(--font-small-weight); }
+.muted { color: var(--color-ink-muted); }
+
+.page { width: 100%; max-width: var(--page-max); margin-inline: auto; padding-inline: var(--space-4); }
+@media (min-width: 720px) { .page { padding-inline: var(--space-8); } }
+
+.skip-link {
+  position: absolute; left: var(--space-4); top: -100px;
+  background: var(--color-ink); color: var(--color-paper);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); z-index: 10;
+}
+.skip-link:focus { top: var(--space-2); }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
