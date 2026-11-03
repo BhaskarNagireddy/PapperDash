@@ -5,6 +5,7 @@ import { IdentityModule } from './blocks/identity/index.js';
 import { OrdersModule } from './blocks/orders/index.js';
 import { PaymentsModule } from './blocks/payments/index.js';
 import { PricingModule } from './blocks/pricing/index.js';
+import { StationsModule } from './blocks/stations/index.js';
 import { WaitlistModule } from './blocks/waitlist/index.js';
 import type { ServiceStatus } from '@papperdash/contracts';
 import { APP_CONFIG, type AppConfig } from './platform/config.js';
@@ -55,7 +56,7 @@ export class AppModule {
   static forRoot(platform: PlatformOptions): DynamicModule {
     return {
       module: AppModule,
-      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule, PaymentsModule, WaitlistModule],
+      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule, PaymentsModule, WaitlistModule, StationsModule],
       controllers: [HealthController, StatusController],
     };
   }

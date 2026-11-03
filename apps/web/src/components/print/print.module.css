@@ -1,0 +1,41 @@
+.flow { display: grid; gap: var(--space-8); }
+.section { display: grid; gap: var(--space-4); margin: 0; padding: var(--space-4); border: 0; border-radius: var(--radius-md); background: var(--color-card); min-width: 0; }
+.section:disabled { opacity: 0.6; }
+.section > legend { float: left; width: 100%; padding: 0; margin-bottom: var(--space-4); }
+.section > legend + * { clear: both; }
+.field { display: grid; gap: var(--space-1); }
+.narrow { max-width: 10rem; }
+.choices { display: grid; gap: var(--space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.choices > legend { padding: 0; margin-bottom: var(--space-1); }
+.radio {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--space-2); align-items: start;
+  min-height: var(--target-min); padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-card); cursor: pointer;
+}
+.radio input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--color-ink); }
+.radio > span { display: grid; gap: 2px; }
+.radioChecked { border-color: var(--color-ink); border-width: 2px; padding: calc(var(--space-2) - 1px) calc(var(--space-4) - 1px); }
+.radio[aria-disabled='true'] { cursor: not-allowed; opacity: 0.6; }
+.radioLabel { font-weight: 600; }
+.fixed { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-8); margin: 0; }
+.fixed dd { margin: 0; }
+.picker { display: grid; gap: var(--space-4); }
+.drop {
+  display: grid; justify-items: start; gap: var(--space-2);
+  padding: var(--space-4); border: 2px dashed var(--color-line); border-radius: var(--radius-md); background: var(--color-paper);
+}
+.dropActive { border-color: var(--color-info); background: var(--color-card); }
+.drop:focus-within label { outline: 2px solid var(--color-info); outline-offset: 2px; }
+/* Visually hidden but still focusable and announced: the label is the visible button. */
+.fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.fileCard { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-4); border-left: 4px solid var(--color-dash); background: var(--color-paper); border-radius: var(--radius-sm); }
+.fileName { font-weight: 700; overflow-wrap: anywhere; }
+.progressRow { display: grid; gap: var(--space-1); }
+.progress { width: 100%; height: 8px; accent-color: var(--color-ink); }
+.linkButton {
+  min-height: var(--target-min); padding: 0; background: none; border: 0;
+  color: var(--color-info); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.price { display: grid; gap: var(--space-1); }
+.total { display: flex; align-items: baseline; gap: var(--space-2); font-size: var(--font-title-size); line-height: var(--font-title-line-height); }
+.total strong { font-weight: 800; }

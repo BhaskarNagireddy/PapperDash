@@ -3,7 +3,7 @@
 import type { Locale, ServiceStatus } from '@papperdash/contracts';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import type { Messages } from '@/i18n/en';
 import { api } from '@/lib/api';
 import { Notice } from './Field';
@@ -68,6 +68,10 @@ export function AccountView({ locale, t }: { locale: Locale; t: T }) {
       ) : null}
 
       {ordering === false ? <Notice tone="info">{t.account.orderingClosed}</Notice> : null}
+
+      <div className={styles.actions}>
+        <ButtonLink href={`/${locale}/print`}>{t.account.print}</ButtonLink>
+      </div>
 
       {logout.error.form ? <Notice tone="error">{logout.error.form}</Notice> : null}
       <div className={styles.actions}>

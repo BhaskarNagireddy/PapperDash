@@ -86,12 +86,18 @@ export class S3ObjectStorage extends ObjectStorage {
   }
 }
 
-/** In-memory storage for tests and for running core without S3/MinIO. Files vanish on restart. */
+/** Where browsers send files when core runs without S3 (local development and CI). See DevUploadController. */
+export const DEV_UPLOAD_PATH = '/v1/documents/dev-upload';
+
+/**
+ * In-memory storage for tests and for running core without S3/MinIO. Files vanish on restart.
+ * Its upload target imitates an S3 presigned POST (same form fields), so the website uses one code path.
+ */
 export class InMemoryObjectStorage extends ObjectStorage {
   readonly objects = new Map<string, { body: Buffer; contentType: string }>();
 
   async createUpload(key: string, opts: { contentType: string; maxBytes: number; expiresInSec: number }): Promise<UploadTarget> {
-    return { url: 'memory://uploads', fields: { key, 'Content-Type': opts.contentType }, expiresAt: new Date(Date.now() + opts.expiresInSec * 1000).toISOString(), maxBytes: opts.maxBytes };
+    return { url: DEV_UPLOAD_PATH, fields: { key, 'Content-Type': opts.contentType }, expiresAt: new Date(Date.now() + opts.expiresInSec * 1000).toISOString(), maxBytes: opts.maxBytes };
   }
   async size(key: string) {
     return this.objects.get(key)?.body.length ?? null;

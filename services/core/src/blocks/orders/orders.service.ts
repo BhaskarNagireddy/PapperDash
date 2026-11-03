@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import {
   canTransition,
   selectedPages,
@@ -8,6 +8,7 @@ import {
   type Money,
   type OrderActor,
   type OrderEvent,
+  type OrderQuoteView,
   type OrderState,
   type OrderView,
   type PrintSettings,
@@ -23,6 +24,7 @@ import { Leases } from '../../platform/leases.js';
 import { PeriodicJob } from '../../platform/periodic.js';
 import { DocumentsService } from '../documents/index.js';
 import { PricingService } from '../pricing/index.js';
+import { StationsService } from '../stations/index.js';
 import { orderStateHistory, orders } from './orders.schema.js';
 
 type OrderRow = typeof orders.$inferSelect;
@@ -50,6 +52,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     private readonly outbox: Outbox,
     private readonly documents: DocumentsService,
     private readonly pricing: PricingService,
+    private readonly stations: StationsService,
   ) {}
 
   onModuleInit() {
@@ -68,20 +71,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     if (!user.emailVerified) {
       throw new ForbiddenException({ error: 'email_not_verified', message: 'Confirm your email address before placing an order. Check your inbox for the link.' });
     }
-    // A session opened by scanning a station's QR code can only order at that station.
-    let stationId = input.stationId ?? null;
-    if (user.stationId) {
-      if (input.fulfilment !== 'walk-up' || (stationId && stationId !== user.stationId)) {
-        throw new ForbiddenException({ error: 'station_session', message: 'At a station you can only print here. Use your phone for pickup or delivery orders.' });
-      }
-      stationId = user.stationId;
-    }
-    // The file must be the customer's own and ready; the page range must exist in it; the price list must accept it.
-    const { pageCount } = await this.documents.getPrintable(user.id, input.documentId);
-    const selection = selectedPages(input.settings.pageRange, pageCount);
-    if ('error' in selection) throw new BadRequestException({ error: 'invalid_page_range', message: selection.error });
-    const pages = selection.pages.length;
-    const quote = await this.pricing.quote({ market: 'SE', pages, copies: input.settings.copies, colour: input.settings.colour, fulfilment: input.fulfilment });
+    const { stationId, pages, quote } = await this.prepare(user, input);
     const now = this.clock.now();
     const row: OrderRow = {
       id: newId('ord'),
@@ -110,6 +100,37 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
       });
     });
     return toView(row);
+  }
+
+  /**
+   * The price of this order if it were placed now, from exactly the checks `create` runs. Works while ordering
+   * is closed and before the email is confirmed, so customers can see what their document will cost.
+   */
+  async quote(user: CurrentUser, input: CreateOrderInput): Promise<OrderQuoteView> {
+    const { pages, documentPages, quote } = await this.prepare(user, input);
+    return { pages, documentPages, quote };
+  }
+
+  /** Validates an order and prices it: the station, the customer's own processed file, its page range, the price list. */
+  private async prepare(user: CurrentUser, input: CreateOrderInput) {
+    // A session opened by scanning a station's QR code can only order at that station.
+    let stationId = input.stationId ?? null;
+    if (user.stationId) {
+      if (input.fulfilment !== 'walk-up' || (stationId && stationId !== user.stationId)) {
+        throw new ForbiddenException({ error: 'station_session', message: 'At a station you can only print here. Use your phone for pickup or delivery orders.' });
+      }
+      stationId = user.stationId;
+    } else if (stationId) {
+      const problem = await this.stations.problemFor(stationId, input.fulfilment);
+      if (problem) throw new UnprocessableEntityException(problem);
+    }
+    // The file must be the customer's own and ready; the page range must exist in it; the price list must accept it.
+    const { pageCount } = await this.documents.getPrintable(user.id, input.documentId);
+    const selection = selectedPages(input.settings.pageRange, pageCount);
+    if ('error' in selection) throw new BadRequestException({ error: 'invalid_page_range', message: selection.error });
+    const pages = selection.pages.length;
+    const quote = await this.pricing.quote({ market: 'SE', pages, copies: input.settings.copies, colour: input.settings.colour, fulfilment: input.fulfilment });
+    return { stationId, pages, documentPages: pageCount, quote };
   }
 
   async listForCustomer(customerId: string, limit = 50): Promise<OrderView[]> {

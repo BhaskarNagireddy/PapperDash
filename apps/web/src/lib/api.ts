@@ -12,6 +12,8 @@ export class ApiError extends Error {
     readonly retryAfterSec?: number,
     /** Field problems for a validation_failed answer. */
     readonly issues?: ReadonlyArray<{ path: string; message: string }>,
+    /** Numbers some errors carry, e.g. maxPages or maxFileMb, for the customer's message. */
+    readonly details: Readonly<Record<string, number>> = {},
   ) {
     super(message);
     this.name = 'ApiError';
@@ -43,10 +45,15 @@ export async function api<T>(path: string, init: RequestInit = {}, fetchImpl: Fe
     message?: string | string[];
     retryAfterSec?: number;
     issues?: Array<{ path: string; message: string }>;
+    maxPages?: number;
+    maxFileMb?: number;
   } | null;
   if (!res.ok) {
     const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
-    throw new ApiError(res.status, body?.error ?? `http_${res.status}`, message ?? 'Something went wrong on our side. Try again in a minute.', body?.retryAfterSec, body?.issues);
+    throw new ApiError(res.status, body?.error ?? `http_${res.status}`, message ?? 'Something went wrong on our side. Try again in a minute.', body?.retryAfterSec, body?.issues, {
+      ...(typeof body?.maxPages === 'number' ? { maxPages: body.maxPages } : {}),
+      ...(typeof body?.maxFileMb === 'number' ? { maxFileMb: body.maxFileMb } : {}),
+    });
   }
   return body as T;
 }
