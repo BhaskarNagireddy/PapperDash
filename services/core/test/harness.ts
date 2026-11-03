@@ -114,6 +114,8 @@ const TEST_RATE_LIMITS: AppConfig['rateLimits'] = {
   loginFailures: DEFAULT_RATE_LIMITS.loginFailures,
   uploadsPerUser: { max: 1000, windowMs: 60 * 60 * 1000 },
   qrPerStation: { max: 1000, windowMs: 60 * 60 * 1000 },
+  waitlistPerIp: { max: 1000, windowMs: 60 * 60 * 1000 },
+  verifyResendPerUser: DEFAULT_RATE_LIMITS.verifyResendPerUser,
 };
 
 /** A full core app on a freshly migrated database. Pass `oauth` to replace the Google/Apple verifier. */
@@ -134,6 +136,7 @@ export async function startHarness(
           port: 0,
           publicWebUrl: 'https://papperdash.test',
           cookieSecure: false,
+          orderingEnabled: true,
           stationKeys: { [STATION.id]: STATION.key },
           oauthAudiences: { google: [], apple: [] },
           stripe: null,

@@ -1,0 +1,88 @@
+import { readFile } from 'node:fs/promises';
+import { expect, test, type Page } from '@playwright/test';
+import { CORE_LOG } from '../playwright.config';
+
+// The real thing: browser -> Next.js (/v1 rewrite) -> core -> PostgreSQL, with the HttpOnly session cookie.
+// Core runs in development mode, which writes emails to its log instead of sending them.
+
+const run = Date.now().toString(36);
+const email = (name: string) => `${name}-${run}@example.se`;
+
+/** The newest link sent to `to`, read from core's log (polls: the email is written just after the response). */
+async function linkFor(to: string, path: string): Promise<string> {
+  for (let i = 0; i < 50; i++) {
+    const log = await readFile(CORE_LOG, 'utf8').catch(() => '');
+    const blocks = log.split(`To ${to}:`);
+    const match = blocks.length > 1 ? blocks.at(-1)!.match(new RegExp(`(http://localhost:3000/\\w\\w/${path}\\?token=[A-Za-z0-9_-]+)`)) : null;
+    if (match?.[1]) return match[1];
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(`No ${path} email for ${to} in ${CORE_LOG}`);
+}
+
+async function signUp(page: Page, address: string, password: string) {
+  await page.goto('/sv/signup');
+  await page.getByLabel('E-postadress').fill(address);
+  await page.getByLabel('Lösenord', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Skapa konto' }).click();
+  await expect(page.getByRole('status')).toContainText('Titta i din inkorg');
+}
+
+async function logIn(page: Page, address: string, password: string) {
+  await page.goto('/sv/login');
+  await page.getByLabel('E-postadress').fill(address);
+  await page.getByLabel('Lösenord', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Logga in' }).click();
+  await expect(page).toHaveURL(/\/sv\/account$/);
+}
+
+test('sign up, confirm the email from the link, log in and out', async ({ page }) => {
+  const address = email('anna');
+  await signUp(page, address, 'ett långt lösenord');
+
+  // The link in the email opens the Swedish page and confirms the address.
+  await page.goto(await linkFor(address, 'verify-email'));
+  await expect(page.getByRole('status')).toContainText('E-postadressen är bekräftad');
+
+  await logIn(page, address, 'ett långt lösenord');
+  await expect(page.getByText(address)).toBeVisible();
+  await expect(page.getByText('Bekräftad', { exact: true })).toBeVisible();
+  // Ordering stays closed until the pilot station runs (core's ORDERING_ENABLED is off by default).
+  await expect(page.getByText('Beställningar öppnar med vår första station i Lund.')).toBeVisible();
+  // The session cookie is HttpOnly: page scripts cannot read it.
+  expect(await page.evaluate(() => document.cookie)).not.toContain('pd_session');
+
+  await page.getByRole('button', { name: 'Logga ut' }).click();
+  await expect(page).toHaveURL(/\/sv$/);
+  await page.goto('/sv/account');
+  await expect(page).toHaveURL('/sv/login?next=/sv/account');
+});
+
+test('reset a forgotten password from the email link', async ({ page }) => {
+  const address = email('bo');
+  await signUp(page, address, 'det gamla lösenordet');
+  await page.goto('/sv/forgot-password');
+  await page.getByLabel('E-postadress').fill(address);
+  await page.getByRole('button', { name: 'Skicka länk' }).click();
+  await expect(page.getByRole('status')).toContainText('Titta i din inkorg');
+
+  await page.goto(await linkFor(address, 'reset-password'));
+  await page.getByLabel('Nytt lösenord').fill('det nya lösenordet');
+  await page.getByRole('button', { name: 'Spara lösenord' }).click();
+  await expect(page.getByRole('status')).toContainText('Lösenordet är ändrat');
+
+  await logIn(page, address, 'det nya lösenordet');
+});
+
+test('join and leave the waitlist', async ({ page }) => {
+  const address = email('eva');
+  await page.goto('/sv/waitlist');
+  await page.getByLabel('E-postadress').fill(address);
+  await page.getByLabel(/Mejla mig en gång/).check();
+  await page.getByRole('button', { name: 'Ställ dig på väntelistan' }).click();
+  await expect(page.getByRole('status')).toContainText('Du står på listan');
+
+  await page.goto(await linkFor(address, 'waitlist/leave'));
+  await page.getByRole('button', { name: 'Ta bort mig' }).click();
+  await expect(page.getByRole('status')).toContainText('Du är borttagen');
+});

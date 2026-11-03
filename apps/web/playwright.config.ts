@@ -6,6 +6,10 @@ import { defineConfig, devices } from '@playwright/test';
 const localChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH ?? '/opt/pw-browsers/chromium';
 const browser = process.env.CI ? { channel: 'chrome' } : existsSync(localChromium) ? { launchOptions: { executablePath: localChromium } } : {};
 
+/** A migrated PostgreSQL database for e2e/fullstack.spec.ts; unset skips those tests. */
+const fullstack = process.env.E2E_DATABASE_URL;
+export const CORE_LOG = 'reports/core.log';
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -14,8 +18,24 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['junit', { outputFile: 'reports/e2e-junit.xml' }], ['html', { open: 'never' }]] : 'list',
   use: { baseURL: 'http://localhost:3000', trace: 'retain-on-failure' },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], ...browser } },
-    { name: 'phone', use: { ...devices['Pixel 7'], ...browser } },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], ...browser }, testIgnore: /fullstack/ },
+    { name: 'phone', use: { ...devices['Pixel 7'], ...browser }, testIgnore: /fullstack/ },
+    // The website against the real core API and PostgreSQL. Runs when a database is given (CI always gives one).
+    ...(fullstack ? [{ name: 'fullstack', use: { ...devices['Desktop Chrome'], ...browser }, testMatch: /fullstack/ }] : []),
   ],
-  webServer: { command: 'pnpm start', url: 'http://localhost:3000/sv', reuseExistingServer: !process.env.CI, timeout: 60_000 },
+  webServer: [
+    { command: 'pnpm start', url: 'http://localhost:3000/sv', reuseExistingServer: !process.env.CI, timeout: 60_000 },
+    ...(fullstack
+      ? [
+          {
+            // Core in development mode writes account emails to its log; the tests read the links from there.
+            command: `mkdir -p reports && exec node ../../services/core/dist/main.js > ${CORE_LOG} 2>&1`,
+            url: 'http://localhost:4000/health/ready',
+            reuseExistingServer: false,
+            timeout: 60_000,
+            env: { DATABASE_URL: fullstack, PORT: '4000', NODE_ENV: 'development', COOKIE_SECURE: 'false', PUBLIC_WEB_URL: 'http://localhost:3000', NO_COLOR: '1' },
+          },
+        ]
+      : []),
+  ],
 });

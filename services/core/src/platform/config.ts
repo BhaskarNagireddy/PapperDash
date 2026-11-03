@@ -25,6 +25,11 @@ const Env = z.object({
   /** Sender for account emails through Amazon SES, e.g. "PapperDash <no-reply@papperdash.se>". Unset = emails are logged (development only). */
   EMAIL_FROM: z.string().min(3).optional(),
   SES_REGION: z.string().default('eu-north-1'),
+  /** Placing orders. Off until the pilot station runs (ADR 0010): accounts, uploads and the waitlist work without it. */
+  ORDERING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   GOOGLE_CLIENT_IDS: z.string().default(''),
   APPLE_CLIENT_IDS: z.string().default(''),
   STATION_KEYS: z
@@ -44,6 +49,8 @@ export type AppConfig = {
   port: number;
   publicWebUrl: string;
   cookieSecure: boolean;
+  /** False refuses new orders with 503 ordering_closed; the website shows the waitlist instead. */
+  orderingEnabled: boolean;
   stationKeys: Record<string, string>;
   /** Accepted ID-token audiences per sign-in provider. An empty list disables that provider. */
   oauthAudiences: { google: string[]; apple: string[] };
@@ -78,6 +85,10 @@ export interface RateLimits {
   uploadsPerUser: Limit;
   /** QR codes per station. */
   qrPerStation: Limit;
+  /** Waitlist sign-ups per IP address. */
+  waitlistPerIp: Limit;
+  /** Verification emails a signed-in customer may ask to have sent again. */
+  verifyResendPerUser: Limit;
 }
 
 const MIN = 60 * 1000;
@@ -89,6 +100,8 @@ export const DEFAULT_RATE_LIMITS: RateLimits = {
   loginFailures: { max: 5, windowMs: 15 * MIN },
   uploadsPerUser: { max: 100, windowMs: HOUR },
   qrPerStation: { max: 240, windowMs: HOUR },
+  waitlistPerIp: { max: 20, windowMs: HOUR },
+  verifyResendPerUser: { max: 3, windowMs: HOUR },
 };
 
 export class UnsafeProductionConfigError extends Error {}
@@ -117,6 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
     port: e.PORT,
     publicWebUrl: e.PUBLIC_WEB_URL,
     cookieSecure: e.COOKIE_SECURE,
+    orderingEnabled: e.ORDERING_ENABLED,
     stationKeys: e.STATION_KEYS,
     oauthAudiences: { google: csv(e.GOOGLE_CLIENT_IDS), apple: csv(e.APPLE_CLIENT_IDS) },
     // Local development: the website runs on localhost:3000 unless told otherwise.

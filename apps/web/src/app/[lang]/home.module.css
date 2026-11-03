@@ -8,3 +8,4 @@
 .stepNumber { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius-pill); background: var(--color-ink); color: var(--color-paper); font-weight: 700; }
 .stepNumberCurrent { background: var(--color-dash); color: var(--color-ink); }
 .privacy { padding-block: var(--space-4); }
+.ctas { display: flex; flex-wrap: wrap; gap: var(--space-2); }

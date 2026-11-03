@@ -1,11 +1,12 @@
+import { ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { getMessages } from '@/i18n/dictionaries';
+import { currentLocale, getMessages } from '@/i18n/dictionaries';
 import styles from './home.module.css';
 
 const STEPS = ['upload', 'configure', 'pay', 'collect'] as const;
 
 export default async function HomePage() {
-  const t = await getMessages();
+  const [locale, t] = await Promise.all([currentLocale(), getMessages()]);
   return (
     <div className="page">
       <section className={styles.hero} aria-labelledby="hero-title">
@@ -15,6 +16,12 @@ export default async function HomePage() {
         </h1>
         <p>{t.home.heroBody}</p>
         <p className={styles.soon}>{t.home.comingSoon}</p>
+        <div className={styles.ctas}>
+          <ButtonLink href={`/${locale}/waitlist`}>{t.home.waitlistCta}</ButtonLink>
+          <ButtonLink href={`/${locale}/signup`} variant="secondary">
+            {t.home.signupCta}
+          </ButtonLink>
+        </div>
       </section>
 
       <section className={styles.how} aria-labelledby="how-title">

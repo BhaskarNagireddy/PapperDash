@@ -19,6 +19,8 @@ describe('loadConfig', () => {
     expect(c.oauthAudiences).toEqual({ google: [], apple: [] });
     expect(c.corsOrigins).toEqual(['http://localhost:3000']);
     expect(c.rateLimits.loginFailures).toEqual({ max: 5, windowMs: 15 * 60 * 1000 });
+    // Ordering stays off until someone turns it on for the pilot station (ADR 0010).
+    expect(c.orderingEnabled).toBe(false);
   });
 
   it('switches integrations on only when all their settings are present', () => {

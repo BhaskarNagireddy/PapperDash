@@ -204,18 +204,34 @@ jobs:
     name: Website (build, unit and browser tests)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      # Throwaway database for the full-stack browser tests (website -> core -> PostgreSQL); see the
+      # integration job for why its password is not a secret.
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Build the website and the packages it uses
-        run: pnpm turbo run build --filter=@papperdash/web...
+      - name: Build the website, core and the packages they use
+        run: pnpm turbo run build --filter=@papperdash/web... --filter=@papperdash/core...
+      - name: Apply database migrations for the full-stack tests
+        run: pnpm --filter @papperdash/core db:migrate
+        env: { DATABASE_URL: '${{ env.E2E_DATABASE_URL }}' }
       - name: Unit tests (translations, locale routing, API client)
         run: pnpm --filter @papperdash/web test
       # Browser tests in Chrome (desktop) and a phone viewport: language, accessibility (axe, WCAG 2.2 AA),
-      # phone layout and security headers. Uses the Google Chrome preinstalled on the runner: nothing downloaded.
+      # phone layout, security headers and every account screen against a mocked API; then the full-stack
+      # journeys (sign up, email link, login, reset, waitlist) against the real core API and PostgreSQL.
+      # Uses the Google Chrome preinstalled on the runner: nothing downloaded.
       - name: Browser tests (Playwright)
         working-directory: apps/web
         run: pnpm exec playwright test
@@ -224,7 +240,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: apps/web/playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/reports
           retention-days: 14
 
   security:

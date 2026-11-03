@@ -6,3 +6,4 @@ export * from '../blocks/orders/orders.schema.js';
 export * from '../blocks/pricing/pricing.schema.js';
 export * from '../blocks/documents/documents.schema.js';
 export * from '../blocks/payments/payments.schema.js';
+export * from '../blocks/waitlist/waitlist.schema.js';
