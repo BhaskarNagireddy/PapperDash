@@ -38,6 +38,15 @@ export class IdentityController {
     await this.identity.verifyEmail(body.token);
   }
 
+  /** Signed in but not verified yet: send the verification link again. */
+  @Post('verify-email/resend')
+  @HttpCode(202)
+  @UseGuards(SessionGuard)
+  async resendVerification(@CurrentUser() user: CurrentUserT) {
+    await this.identity.resendVerification(user);
+    return { message: 'We have sent a new link. Check your inbox.' };
+  }
+
   @Post('login')
   @HttpCode(200)
   async login(@Body(new ZodPipe(LoginInput)) body: LoginInput, @Req() req: Request, @Res({ passthrough: true }) res: Response) {

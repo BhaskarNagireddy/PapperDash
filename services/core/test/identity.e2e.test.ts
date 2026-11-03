@@ -113,3 +113,32 @@ describe('QR sign-in at a station', () => {
     await h.http().post('/v1/auth/qr/approve').send({ token: created.body.qrUrl.split('/').pop() }).expect(401);
   });
 });
+
+describe('verification links', () => {
+  it('open the page in the customer’s language and can be sent again until the email is verified', async () => {
+    await h.http().post('/v1/auth/register').send({ email: 'again@example.se', password: 'long enough pw', locale: 'en' }).expect(201);
+    expect(h.email.sent.at(-1)!.text).toContain('https://papperdash.test/en/verify-email?token=');
+    const login = await h.http().post('/v1/auth/login').send({ email: 'again@example.se', password: 'long enough pw' }).expect(200);
+    const auth = `Bearer ${login.body.token}`;
+
+    const before = h.email.sent.length;
+    await h.http().post('/v1/auth/verify-email/resend').set('Authorization', auth).expect(202);
+    expect(h.email.sent).toHaveLength(before + 1);
+    await h.http().post('/v1/auth/verify-email').send({ token: lastToken(h.email, 'again@example.se') }).expect(204);
+
+    // Verified: asking again sends nothing.
+    await h.http().post('/v1/auth/verify-email/resend').set('Authorization', auth).expect(202);
+    expect(h.email.sent).toHaveLength(before + 1);
+  });
+
+  it('can be resent at most 3 times an hour', async () => {
+    await h.http().post('/v1/auth/register').send({ email: 'spam@example.se', password: 'long enough pw' }).expect(201);
+    const login = await h.http().post('/v1/auth/login').send({ email: 'spam@example.se', password: 'long enough pw' }).expect(200);
+    for (let i = 0; i < 3; i++) await h.http().post('/v1/auth/verify-email/resend').set('Authorization', `Bearer ${login.body.token}`).expect(202);
+    await h.http().post('/v1/auth/verify-email/resend').set('Authorization', `Bearer ${login.body.token}`).expect(429);
+  });
+
+  it('needs a signed-in customer', async () => {
+    await h.http().post('/v1/auth/verify-email/resend').expect(401);
+  });
+});

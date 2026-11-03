@@ -76,9 +76,28 @@ export class IdentityService {
       return row;
     });
 
-    const msg = authEmails.verify(input.locale, `${this.config.publicWebUrl}/verify-email?token=${verifyToken}`);
+    const msg = authEmails.verify(input.locale, `${this.config.publicWebUrl}/${input.locale}/verify-email?token=${verifyToken}`);
     await this.email.send({ to: input.email, ...msg });
     return toCurrentUser(user);
+  }
+
+  /**
+   * Sends a fresh verification link to a signed-in customer whose email is not confirmed yet (the first email
+   * was lost or expired). Earlier links stay valid until they expire. Silently does nothing once verified.
+   */
+  async resendVerification(user: CurrentUser): Promise<void> {
+    if (user.emailVerified) return;
+    await this.limits.enforce(`verify-resend:${user.id}`, this.config.rateLimits.verifyResendPerUser, 'We have sent several links already. Check your spam folder, or try again in an hour.');
+    const token = newSecret();
+    await this.db.insert(oneTimeTokens).values({
+      id: newId('ott'),
+      tokenHash: sha256(token),
+      userId: user.id,
+      purpose: 'verify-email',
+      expiresAt: new Date(this.clock.now().getTime() + VERIFY_TTL_MS),
+    });
+    const msg = authEmails.verify(user.locale, `${this.config.publicWebUrl}/${user.locale}/verify-email?token=${token}`);
+    await this.email.send({ to: user.email, ...msg });
   }
 
   async verifyEmail(token: string): Promise<void> {
@@ -209,7 +228,7 @@ export class IdentityService {
       purpose: 'reset-password',
       expiresAt: new Date(this.clock.now().getTime() + RESET_TTL_MS),
     });
-    const msg = authEmails.reset(user.locale as Locale, `${this.config.publicWebUrl}/reset-password?token=${token}`);
+    const msg = authEmails.reset(user.locale as Locale, `${this.config.publicWebUrl}/${user.locale}/reset-password?token=${token}`);
     await this.email.send({ to: user.email, ...msg });
   }
 

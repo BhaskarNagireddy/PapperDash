@@ -10,6 +10,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly retryAfterSec?: number,
+    /** Field problems for a validation_failed answer. */
+    readonly issues?: ReadonlyArray<{ path: string; message: string }>,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -36,10 +38,15 @@ export async function api<T>(path: string, init: RequestInit = {}, fetchImpl: Fe
     throw new ApiError(0, 'network', 'No connection. Check your internet and try again.');
   }
   if (res.status === 204) return undefined as T;
-  const body = (await res.json().catch(() => null)) as { error?: string; message?: string | string[]; retryAfterSec?: number } | null;
+  const body = (await res.json().catch(() => null)) as {
+    error?: string;
+    message?: string | string[];
+    retryAfterSec?: number;
+    issues?: Array<{ path: string; message: string }>;
+  } | null;
   if (!res.ok) {
     const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
-    throw new ApiError(res.status, body?.error ?? `http_${res.status}`, message ?? 'Something went wrong on our side. Try again in a minute.', body?.retryAfterSec);
+    throw new ApiError(res.status, body?.error ?? `http_${res.status}`, message ?? 'Something went wrong on our side. Try again in a minute.', body?.retryAfterSec, body?.issues);
   }
   return body as T;
 }

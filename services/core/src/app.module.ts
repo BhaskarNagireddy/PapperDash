@@ -5,6 +5,9 @@ import { IdentityModule } from './blocks/identity/index.js';
 import { OrdersModule } from './blocks/orders/index.js';
 import { PaymentsModule } from './blocks/payments/index.js';
 import { PricingModule } from './blocks/pricing/index.js';
+import { WaitlistModule } from './blocks/waitlist/index.js';
+import type { ServiceStatus } from '@papperdash/contracts';
+import { APP_CONFIG, type AppConfig } from './platform/config.js';
 import { DB, type Db } from './platform/database.js';
 import { PlatformModule, type PlatformOptions } from './platform/platform.module.js';
 
@@ -32,6 +35,17 @@ class HealthController {
   }
 }
 
+/** `/status`: what the website should offer right now (for example, whether ordering is open). */
+@Controller('status')
+class StatusController {
+  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
+
+  @Get()
+  status(): ServiceStatus {
+    return { ordering: this.config.orderingEnabled };
+  }
+}
+
 /**
  * Composition root. Each block is one module; adding a block is one line here.
  * A block extracted into its own service is removed from this list and reached over the network instead.
@@ -41,8 +55,8 @@ export class AppModule {
   static forRoot(platform: PlatformOptions): DynamicModule {
     return {
       module: AppModule,
-      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule, PaymentsModule],
-      controllers: [HealthController],
+      imports: [PlatformModule.forRoot(platform), IdentityModule, PricingModule, DocumentsModule, OrdersModule, PaymentsModule, WaitlistModule],
+      controllers: [HealthController, StatusController],
     };
   }
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import {
   canTransition,
   selectedPages,
@@ -62,6 +62,9 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   }
 
   async create(user: CurrentUser, input: CreateOrderInput): Promise<OrderView> {
+    if (!this.config.orderingEnabled) {
+      throw new ServiceUnavailableException({ error: 'ordering_closed', message: 'Ordering opens with our first station. Join the waitlist and we will email you.' });
+    }
     if (!user.emailVerified) {
       throw new ForbiddenException({ error: 'email_not_verified', message: 'Confirm your email address before placing an order. Check your inbox for the link.' });
     }
