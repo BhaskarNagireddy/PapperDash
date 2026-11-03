@@ -19,7 +19,9 @@ export async function mockApi(page: Page, handlers: Record<string, Handler> = {}
     const req = route.request();
     const path = new URL(req.url()).pathname;
     const key = `${req.method()} ${path}`;
-    calls.push({ method: req.method(), path, body: req.postDataJSON() as unknown });
+    // Uploads are multipart form data, not JSON: keep those bodies out of `calls`.
+    const isJson = (req.headers()['content-type'] ?? '').includes('application/json');
+    calls.push({ method: req.method(), path, body: isJson ? (req.postDataJSON() as unknown) : undefined });
     const handler = all[key];
     if (!handler) return route.fulfill({ status: 500, json: { error: 'unmocked', message: `No mock for ${key}` } });
     const reply = await handler(req);

@@ -5,6 +5,14 @@ const isDev = process.env.NODE_ENV === 'development';
 /** Where the core API runs. In production CloudFront serves both from papperdash.se, so this is only a fallback. */
 const coreUrl = process.env.CORE_URL ?? 'http://localhost:4000';
 
+/**
+ * The document bucket's origin (https://<bucket>.s3.eu-north-1.amazonaws.com). Browsers upload files straight to
+ * it with a presigned POST, so it must be allowed in connect-src. Unset in development and CI, where uploads go
+ * to core's /v1/documents/dev-upload on our own origin.
+ */
+const uploadOrigin = process.env.UPLOAD_ORIGIN;
+if (uploadOrigin && !/^https:\/\/[a-z0-9.-]+$/.test(uploadOrigin)) throw new Error('UPLOAD_ORIGIN must be an https origin with no path');
+
 // Static pages cannot carry a per-request nonce, so scripts allow 'unsafe-inline' (the documented setting for
 // statically rendered Next.js pages). Everything else is locked to our own origin; Stripe is added with checkout.
 const contentSecurityPolicy = [
@@ -13,7 +21,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self'",
-  "connect-src 'self'",
+  `connect-src 'self'${uploadOrigin ? ` ${uploadOrigin}` : ''}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

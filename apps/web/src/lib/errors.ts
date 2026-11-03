@@ -17,6 +17,8 @@ const FIELD_MESSAGES: Record<string, keyof Errors> = {
   password: 'passwordTooShort',
   consent: 'consentRequired',
   postcode: 'invalidPostcode',
+  'settings.pageRange': 'invalidPageRange',
+  pageRange: 'invalidPageRange',
 };
 
 export function fieldErrors(issues: ReadonlyArray<{ path: string }>, t: Errors): FieldErrors {
@@ -56,6 +58,29 @@ export function toFormError(err: unknown, t: Errors): FormError {
       return { form: t.rateLimited, fields: {} };
     case 'link_expired':
       return { form: t.linkExpired, fields: {} };
+    case 'too_large':
+      return { form: fill(t.tooLarge, { mb: String(err.details.maxFileMb ?? 50) }), fields: {} };
+    case 'too_many_pages':
+      return { form: fill(t.tooManyPages, { max: String(err.details.maxPages ?? 50) }), fields: {} };
+    case 'invalid_page_range':
+      return { form: t.invalidPageRange, fields: { pageRange: t.invalidPageRange } };
+    case 'colour_unavailable':
+      return { form: t.colourUnavailable, fields: {} };
+    case 'station_unavailable':
+      return { form: t.stationUnavailable, fields: {} };
+    case 'no_lockers':
+      return { form: t.noLockers, fields: {} };
+    case 'upload_missing':
+    case 'upload_failed':
+      return { form: t.uploadFailed, fields: {} };
+    case 'processing_slow':
+      return { form: t.processingSlow, fields: {} };
+    case 'document_not_found':
+      return { form: t.documentGone, fields: {} };
+    case 'email_not_verified':
+      return { form: t.emailNotVerified, fields: {} };
+    case 'ordering_closed':
+      return { form: t.orderingClosed, fields: {} };
     case 'validation_failed':
       return { form: t.formHasErrors, fields: fieldErrors(err.issues ?? [], t) };
     default:

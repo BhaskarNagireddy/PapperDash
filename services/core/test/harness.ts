@@ -13,6 +13,7 @@ import { configureApp } from '../src/app.js';
 import { AppModule } from '../src/app.module.js';
 import { InMemoryObjectStorage, ObjectStorage } from '../src/blocks/documents/index.js';
 import { OAuthVerifier } from '../src/blocks/identity/index.js';
+import { StationsService } from '../src/blocks/stations/index.js';
 import { EventBus } from '../src/platform/events.js';
 import { pdfWithPages } from './fixtures.js';
 import { Clock } from '../src/platform/clock.js';
@@ -160,6 +161,8 @@ export async function startHarness(
   await app.listen(0, '127.0.0.1');
   const url = (await app.getUrl()).replace('[::1]', '127.0.0.1');
   const bus = app.get(EventBus);
+  // The test station is in the directory, open, with lockers, like the pilot station will be.
+  await app.get(StationsService).upsert(STATION.id, { name: 'Lund simulator', address: 'Testgatan 1', city: 'Lund', lockers: true, active: true });
   return {
     app,
     db,

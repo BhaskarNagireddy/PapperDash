@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { DomainEvent } from './events.js';
+import type { Quote } from './pricing.js';
 
 export const FULFILMENT_METHODS = ['walk-up', 'locker', 'delivery'] as const;
 export type FulfilmentMethod = (typeof FULFILMENT_METHODS)[number];
@@ -119,6 +120,18 @@ export interface Money {
   /** Amount in minor units (öre, cents). */
   amountMinor: number;
   currency: 'SEK' | 'DKK' | 'EUR';
+}
+
+/**
+ * The price of an order before it is placed, from the same checks the order itself runs: the customer's own,
+ * processed document, its real page count, the page range, the copies and the station. Shown at the order step.
+ */
+export interface OrderQuoteView {
+  /** Pages selected from the document, per copy. */
+  pages: number;
+  /** Pages in the document. */
+  documentPages: number;
+  quote: Quote;
 }
 
 export interface OrderView {

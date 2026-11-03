@@ -12,7 +12,7 @@
       ],
       "env": [
         "CORE_URL",
-        "PUBLIC_WEB_URL"
+        "PUBLIC_WEB_URL", "UPLOAD_ORIGIN"
       ]
     },
     "typecheck": {

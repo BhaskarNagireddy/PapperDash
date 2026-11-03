@@ -125,6 +125,17 @@ export class DocumentsService implements OnModuleInit, OnModuleDestroy {
     return toView(updated ?? doc);
   }
 
+  /** For the development upload: the customer's own document still waiting for its file at this storage key. */
+  async awaitingUpload(ownerId: string, sourceKey: string): Promise<{ contentType: string; maxBytes: number } | null> {
+    const [doc] = await this.db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.sourceKey, sourceKey), eq(documents.ownerId, ownerId), eq(documents.status, 'awaiting_upload')));
+    if (!doc) return null;
+    const { maxFileMb } = await this.pricing.active('SE');
+    return { contentType: doc.contentType, maxBytes: maxFileMb * 1024 * 1024 };
+  }
+
   async get(user: CurrentUser, documentId: string): Promise<DocumentView> {
     return toView(await this.ownedBy(user.id, documentId));
   }

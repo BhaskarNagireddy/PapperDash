@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { CORE_LOG } from '../playwright.config';
+import { pdfWithPages } from './pdf';
 
 // The real thing: browser -> Next.js (/v1 rewrite) -> core -> PostgreSQL, with the HttpOnly session cookie.
 // Core runs in development mode, which writes emails to its log instead of sending them.
@@ -85,4 +86,32 @@ test('join and leave the waitlist', async ({ page }) => {
   await page.goto(await linkFor(address, 'waitlist/leave'));
   await page.getByRole('button', { name: 'Ta bort mig' }).click();
   await expect(page.getByRole('status')).toContainText('Du är borttagen');
+});
+
+test('upload a PDF: core counts its pages and the order step shows that document’s price', async ({ page }) => {
+  const address = email('cia');
+  await signUp(page, address, 'ett långt lösenord');
+  await page.goto(await linkFor(address, 'verify-email'));
+  await expect(page.getByRole('status')).toContainText('E-postadressen är bekräftad');
+  await logIn(page, address, 'ett långt lösenord');
+
+  await page.getByRole('link', { name: 'Skriv ut ett dokument' }).click();
+  await expect(page).toHaveURL(/\/sv\/print$/);
+  await page.locator('#file').setInputFiles({ name: 'tenta.pdf', mimeType: 'application/pdf', buffer: pdfWithPages(7) });
+
+  // Core received the file, counted 7 pages and priced it from the seeded price list: 6-15 pages = 16 kr.
+  await expect(page.getByTestId('page-count')).toHaveText('7 sidor', { timeout: 20_000 });
+  await expect(page.getByTestId('price-total')).toHaveText(/16,00\s*kr/);
+  await page.getByLabel('Bara vissa sidor').check();
+  await page.getByLabel('Vilka sidor').fill('1-3');
+  await expect(page.getByTestId('price-total')).toHaveText(/10,00\s*kr/);
+  await page.getByLabel('Vilka sidor').fill('5-9');
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Välj sidor som finns i dokumentet, till exempel 1-3,5.');
+
+  // No station is open in a fresh database, and ordering is closed until the pilot station runs.
+  await expect(page.getByLabel(/^Leverans/)).toBeChecked();
+  await expect(page.getByRole('link', { name: 'Ställ dig på väntelistan' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Ta bort filen' }).click();
+  await expect(page.getByTestId('page-count')).toHaveCount(0);
 });

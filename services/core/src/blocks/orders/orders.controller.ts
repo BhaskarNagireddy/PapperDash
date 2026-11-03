@@ -14,6 +14,13 @@ export class OrdersController {
     return this.orders.create(user, body);
   }
 
+  /** The price before ordering, from the uploaded document's real page count. */
+  @Post('quote')
+  @HttpCode(200)
+  quote(@CurrentUser() user: CurrentUserT, @Body(new ZodPipe(CreateOrderInput)) body: CreateOrderInput) {
+    return this.orders.quote(user, body);
+  }
+
   @Get()
   async list(@CurrentUser() user: CurrentUserT) {
     return { orders: await this.orders.listForCustomer(user.id) };

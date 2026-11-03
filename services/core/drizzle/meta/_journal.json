@@ -57,6 +57,13 @@
       "when": 1793737479419,
       "tag": "0007_waitlist",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793739960115,
+      "tag": "0008_stations",
+      "breakpoints": true
     }
   ]
 }
