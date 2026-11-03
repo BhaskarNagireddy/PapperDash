@@ -1,0 +1,31 @@
+{
+  "name": "@papperdash/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The PapperDash design system's tokens (colours, type, spacing, radius, sizes) as CSS custom properties and typed values. tokens.json is copied from the approved design system.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tokens.css": "./dist/tokens.css"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  },
+  "files": [
+    "dist",
+    "tokens.json"
+  ]
+}

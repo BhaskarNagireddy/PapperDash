@@ -56,6 +56,9 @@
           },
           {
             "context": "Docker image (build, boot, vulnerability scan)"
+          },
+          {
+            "context": "Website (build, unit and browser tests)"
           }
         ]
       }

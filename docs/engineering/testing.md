@@ -18,7 +18,7 @@ Every change reaches `main` through a pull request. **Branch protection makes ev
 | **Multi-instance safety** | `test/hardening.e2e.test.ts` | Only the website origin passes CORS; request limits answer 429 (reset emails are capped silently); a second instance cannot run a job whose lease another holds, and takes over when it lapses; abandoned drafts and checkouts expire, never a Klarna payment still being confirmed, and a late payment is refunded | Every PR |
 | **Data exposure** | `test/data-exposure.e2e.test.ts` | No response or log line ever contains a password, hash, token, storage key, Stripe secret or another customer's data | Every PR |
 | **Container** | CI job "Docker image" | The production image builds, runs as non-root, applies migrations, reports ready, sends security headers, allows only listed CORS origins, and refuses unsafe production settings | Every PR |
-| **End-to-end (browser)** | `apps/web/e2e` (with the website) | A real browser signs up, uploads, pays in the Stripe sandbox and tracks the order | Planned with the website |
+| **Website** | `apps/web` (Vitest unit tests; Playwright browser tests in `apps/web/e2e`) | Translations complete, locale routing, the API client; in Chrome on desktop and phone: Swedish default and remembered language, 404s, WCAG 2.2 AA (axe), no sideways scrolling, 48 px tap targets, security headers | Every PR (CI job "Website (build, unit and browser tests)") |
 | **Load** | `tests/load` (before launch) | Response times and error rate at expected exam-week peak | Before launch, and before big changes |
 
 Run them locally:
