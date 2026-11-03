@@ -130,7 +130,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
     const attempt = (latest?.attempt ?? 0) + 1;
     const expiresAt = new Date(now.getTime() + CHECKOUT_TTL_MS);
-    const orderPage = `${this.config.publicWebUrl}/orders/${order.id}`;
+    const orderPage = `${this.config.publicWebUrl}/${user.locale}/orders/${order.id}`;
     const created = await provider.createCheckout({
       orderId: order.id,
       reference: order.reference,

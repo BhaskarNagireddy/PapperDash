@@ -81,6 +81,16 @@ export function toFormError(err: unknown, t: Errors): FormError {
       return { form: t.emailNotVerified, fields: {} };
     case 'ordering_closed':
       return { form: t.orderingClosed, fields: {} };
+    case 'payments_unavailable':
+      return { form: t.paymentsUnavailable, fields: {} };
+    case 'already_paid':
+      return { form: t.alreadyPaid, fields: {} };
+    case 'payment_processing':
+      return { form: t.paymentProcessing, fields: {} };
+    case 'order_cancelled':
+      return { form: t.orderCancelled, fields: {} };
+    case 'not_cancellable':
+      return { form: t.notCancellable, fields: {} };
     case 'validation_failed':
       return { form: t.formHasErrors, fields: fieldErrors(err.issues ?? [], t) };
     default:

@@ -11,6 +11,7 @@ import { ButtonLink } from '@/components/ui/Button';
 import type { Messages } from '@/i18n/en';
 import { api } from '@/lib/api';
 import { fill, toFormError, type FormError } from '@/lib/errors';
+import { goToCheckout } from '@/lib/checkout';
 import { formatMoney } from '@/lib/money';
 import { useSession } from '@/lib/session';
 import { FilePicker } from './FilePicker';
@@ -56,6 +57,7 @@ export function PrintFlow({ locale, t }: { locale: Locale; t: T }) {
   const [choices, setChoices] = useState<PrintChoices>({ copies: 1, someP: false, pageRange: '', duplex: false, fulfilment: 'delivery', stationId: '' });
   const [quote, setQuote] = useState<QuoteState>({ kind: 'idle' });
   const [ordered, setOrdered] = useState<OrderView | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const placing = useSubmit(t.errors);
 
   useEffect(() => {
@@ -102,10 +104,16 @@ export function PrintFlow({ locale, t }: { locale: Locale; t: T }) {
 
   if (ordered) {
     return (
-      <Notice tone="success">
-        <p className="heading">{fill(t.print.orderedTitle, { reference: ordered.reference })}</p>
-        <p>{t.print.orderedBody}</p>
-      </Notice>
+      <>
+        <Notice tone="info">
+          <p className="heading">{fill(t.print.orderedTitle, { reference: ordered.reference })}</p>
+          <p>{t.print.orderedBody}</p>
+        </Notice>
+        {placing.error.form ? <Notice tone="error">{placing.error.form}</Notice> : null}
+        <div className={forms.actions}>
+          <ButtonLink href={`/${locale}/orders/${ordered.id}`}>{t.print.openOrder}</ButtonLink>
+        </div>
+      </>
     );
   }
 
@@ -250,12 +258,23 @@ export function PrintFlow({ locale, t }: { locale: Locale; t: T }) {
             onSubmit={(e) => {
               e.preventDefault();
               if (!input || quote.kind !== 'ready') return;
-              void placing.run(async () => setOrdered(await api<OrderView>('/orders', { method: 'POST', body: JSON.stringify(input) })));
+              void placing.run(async () => {
+                const order = await api<OrderView>('/orders', { method: 'POST', body: JSON.stringify(input) });
+                setRedirecting(true);
+                try {
+                  await goToCheckout(order.id);
+                } catch (err) {
+                  // The order is saved; the customer can pay from its page.
+                  setRedirecting(false);
+                  setOrdered(order);
+                  throw err;
+                }
+              });
             }}
           >
             {placing.error.form ? <Notice tone="error">{placing.error.form}</Notice> : null}
             <div className={forms.actions}>
-              <SubmitButton pending={placing.pending || quote.kind !== 'ready'} label={t.print.placeOrder} sending={t.form.sending} />
+              <SubmitButton pending={placing.pending || redirecting || quote.kind !== 'ready'} label={t.print.placeOrder} sending={redirecting ? t.print.redirecting : t.form.sending} />
             </div>
           </form>
         ) : null}
