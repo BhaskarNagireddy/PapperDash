@@ -6,6 +6,9 @@
 #   1. With a filled cache, install those files directly with dpkg: no package lists, no mirror contact.
 #   2. Otherwise, or if the cached set no longer fits the runner image, download from the mirror with 30 s
 #      network timeouts, apt's own retries and up to 3 attempts. The files land in the cache for next time.
+#      Downloading and installing are separate steps: a slow mirror (0.3 MB/s for ~96 MB, incident
+#      2026-11-03-002) gets a long download budget, and files finished in one attempt are kept, so each
+#      retry only fetches what is still missing. Installing from the downloaded files is then quick.
 set -euo pipefail
 
 CACHE_DIR="${LIBREOFFICE_DEB_CACHE:-$HOME/.cache/apt-libreoffice}"
@@ -38,7 +41,8 @@ for attempt in 1 2 3; do
   # The first install (no package names) repairs anything a failed cached install left half-done.
   if sudo timeout 90 apt-get "${APT_OPTS[@]}" update -q &&
     sudo timeout 180 apt-get "${APT_OPTS[@]}" -o "Dir::Cache::Archives=$CACHE_DIR/" install -f -y -q &&
-    sudo timeout 180 apt-get "${APT_OPTS[@]}" -o "Dir::Cache::Archives=$CACHE_DIR/" install -y -q --no-install-recommends libreoffice-writer-nogui; then
+    sudo timeout 420 apt-get "${APT_OPTS[@]}" -o "Dir::Cache::Archives=$CACHE_DIR/" install -y -q --download-only --no-install-recommends libreoffice-writer-nogui &&
+    sudo timeout 300 apt-get "${APT_OPTS[@]}" -o "Dir::Cache::Archives=$CACHE_DIR/" install -y -q --no-download --no-install-recommends libreoffice-writer-nogui; then
     echo "::endgroup::"
     tidy_cache
     echo "Cached $(ls "$CACHE_DIR"/*.deb 2>/dev/null | wc -l) packages for the next run"
