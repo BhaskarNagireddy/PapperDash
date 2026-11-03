@@ -17,7 +17,7 @@ _Last updated 2026-10-12._
 | Backend hardening | Done | Website access (CORS allowlist), one background worker across instances (leases), shared request limits, expiry of abandoned orders ([ADR 0009](decisions/0009-coordination-in-postgresql.md)) |
 | Payments | Done | Stripe Checkout (card, Apple Pay, Google Pay, Klarna), webhooks, refunds, Stripe Tax switch (off) |
 | Quality | Done | 120+ unit and integration tests, coverage minimums, real PostgreSQL and S3 tests, data-leak tests, security scans, Docker image checks |
-| **Website** | **In progress** | Foundations: Next.js, sv/en, design tokens, components, browser tests ([ADR 0011](decisions/0011-website-architecture.md)). Waitlist, sign-up, email verification, login, password reset and the ordering switch ([ADR 0012](decisions/0012-accounts-waitlist-and-price-at-order.md)). The order step: upload, settings, pick-up, the document's own price, stations directory ([ADR 0013](decisions/0013-order-step-stations-and-uploads.md)) |
+| **Website** | **In progress** | Foundations: Next.js, sv/en, design tokens, components, browser tests ([ADR 0011](decisions/0011-website-architecture.md)). Waitlist, sign-up, email verification, login, password reset and the ordering switch ([ADR 0012](decisions/0012-accounts-waitlist-and-price-at-order.md)). The order step: upload, settings, pick-up, the document's own price, stations directory ([ADR 0013](decisions/0013-order-step-stations-and-uploads.md)). Checkout and the order page, with a test checkout for development and CI ([ADR 0014](decisions/0014-checkout-and-order-page.md)) |
 | **AWS environment** | **Next** | — |
 | Notifications | Not started | Order status emails and SMS |
 | Admin console | Not started | Orders, refunds, prices for staff |
@@ -41,7 +41,7 @@ Each step is its own pull request with its own tests, merged only when every che
    - upload, which reads the page count and shows that document's price from the page-count tiers, at the order step, not as a public price table (done, ADR 0012 and 0013);
    - print settings and the fulfilment choice: print here, store in a locker at a chosen station, or delivery (done; stations come from the new stations directory, ADR 0013).
 3. **Website part 2:**
-   - checkout (redirect to Stripe) and the return page;
+   - checkout (redirect to Stripe) and the return page (done, ADR 0014);
    - order tracking (Printing, Printed, In locker / Waiting for courier, Collected by courier, Delivered) and order history;
    - account settings, privacy policy and terms;
    - the QR link landing page (open the app, or go to the app stores);

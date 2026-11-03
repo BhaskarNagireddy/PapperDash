@@ -55,7 +55,7 @@ describe('checkout', () => {
     // Stripe's minimum checkout lifetime is 30 minutes.
     expect(new Date(res.body.expiresAt).getTime() - h.clock.now().getTime()).toBe(30 * 60 * 1000);
     // After paying, Stripe returns the customer to the order page, which opens the app on phones.
-    expect(stripe.latest().successUrl).toBe(`https://papperdash.test/orders/${order.id}?checkout=success`);
+    expect(stripe.latest().successUrl).toBe(`https://papperdash.test/en/orders/${order.id}?checkout=success`);
     expect((await getOrder(token, order.id)).state).toBe('AwaitingPayment');
 
     // Returning to checkout resumes the same page instead of opening a second one.

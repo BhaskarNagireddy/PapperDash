@@ -54,6 +54,8 @@ export type AppConfig = {
   stationKeys: Record<string, string>;
   /** Accepted ID-token audiences per sign-in provider. An empty list disables that provider. */
   oauthAudiences: { google: string[]; apple: string[] };
+  /** Without Stripe keys outside production: the test checkout (DevPaymentProvider), which never moves money. */
+  devPayments: boolean;
   /** Stripe keys; null switches payments off. */
   stripe: { secretKey: string; webhookSecret: string; automaticTax: boolean } | null;
   /** Amazon SES sender; null logs emails instead (development only — refused in production). */
@@ -120,6 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
       // Without SES, emails (with password-reset and verification links) would be written to the logs.
       !e.EMAIL_FROM && 'EMAIL_FROM is required (account emails must be sent through SES, never logged)',
       !e.PUBLIC_WEB_URL.startsWith('https://') && 'PUBLIC_WEB_URL must use https',
+      e.ORDERING_ENABLED && !(e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET) && 'ORDERING_ENABLED needs STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET (customers could not pay)',
       !csv(e.CORS_ORIGINS).length && 'CORS_ORIGINS is required (the website origins allowed to call the API)',
       csv(e.CORS_ORIGINS).some((o) => !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(o)) && 'CORS_ORIGINS entries must be exact https origins, never "*" or a path',
     ].filter((p): p is string => !!p);
@@ -136,6 +139,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
     // Local development: the website runs on localhost:3000 unless told otherwise.
     corsOrigins: csv(e.CORS_ORIGINS).length ? csv(e.CORS_ORIGINS) : e.NODE_ENV === 'production' ? [] : ['http://localhost:3000'],
     rateLimits: DEFAULT_RATE_LIMITS,
+    devPayments: e.NODE_ENV !== 'production' && !(e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET),
     stripe:
       e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET
         ? { secretKey: e.STRIPE_SECRET_KEY, webhookSecret: e.STRIPE_WEBHOOK_SECRET, automaticTax: e.STRIPE_AUTOMATIC_TAX }

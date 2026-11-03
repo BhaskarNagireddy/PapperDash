@@ -141,6 +141,7 @@ export async function startHarness(
           stationKeys: { [STATION.id]: STATION.key },
           oauthAudiences: { google: [], apple: [] },
           stripe: null,
+          devPayments: false,
           email: null,
           storage: null,
           corsOrigins: ['http://localhost:3000'],

@@ -48,8 +48,8 @@ test('sign up, confirm the email from the link, log in and out', async ({ page }
   await logIn(page, address, 'ett långt lösenord');
   await expect(page.getByText(address)).toBeVisible();
   await expect(page.getByText('Bekräftad', { exact: true })).toBeVisible();
-  // Ordering stays closed until the pilot station runs (core's ORDERING_ENABLED is off by default).
-  await expect(page.getByText('Beställningar öppnar med vår första station i Lund.')).toBeVisible();
+  // Ordering is open in this test setup, so the account page does not show the "opens soon" notice.
+  await expect(page.getByText('Beställningar öppnar med vår första station i Lund.')).toHaveCount(0);
   // The session cookie is HttpOnly: page scripts cannot read it.
   expect(await page.evaluate(() => document.cookie)).not.toContain('pd_session');
 
@@ -108,10 +108,50 @@ test('upload a PDF: core counts its pages and the order step shows that document
   await page.getByLabel('Vilka sidor').fill('5-9');
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('Välj sidor som finns i dokumentet, till exempel 1-3,5.');
 
-  // No station is open in a fresh database, and ordering is closed until the pilot station runs.
+  // No station is open in a fresh database, so delivery is the choice.
   await expect(page.getByLabel(/^Leverans/)).toBeChecked();
-  await expect(page.getByRole('link', { name: 'Ställ dig på väntelistan' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Ta bort filen' }).click();
   await expect(page.getByTestId('page-count')).toHaveCount(0);
+});
+
+test('order and pay: the test checkout pays through the real webhook code and the order becomes Paid', async ({ page }) => {
+  const address = email('dan');
+  await signUp(page, address, 'ett långt lösenord');
+  await page.goto(await linkFor(address, 'verify-email'));
+  await expect(page.getByRole('status')).toContainText('E-postadressen är bekräftad');
+  await logIn(page, address, 'ett långt lösenord');
+
+  await page.goto('/sv/print');
+  await page.locator('#file').setInputFiles({ name: 'tenta.pdf', mimeType: 'application/pdf', buffer: pdfWithPages(3) });
+  await expect(page.getByTestId('price-total')).toHaveText(/10,00\s*kr/, { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Beställ och betala' }).click();
+
+  // Core's test checkout stands in for Stripe: it says no money moves and shows the order's own price.
+  await expect(page.getByRole('heading', { name: 'Testbetalning' })).toBeVisible();
+  await expect(page.getByTestId('dev-amount')).toHaveText('10,00 kr');
+  await page.getByRole('button', { name: 'Betala (test)' }).click();
+
+  // Back on the order page, which waits for the webhook's effect on the order.
+  await expect(page).toHaveURL(/\/sv\/orders\/ord_[A-Z0-9]+$/);
+  await expect(page.getByText('Tack. Din betalning är klar.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Betald', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('order-total')).toHaveText(/10,00\s*kr/);
+});
+
+test('leave the payment page without paying, then cancel the order', async ({ page }) => {
+  const address = email('eda');
+  await signUp(page, address, 'ett långt lösenord');
+  await page.goto(await linkFor(address, 'verify-email'));
+  await logIn(page, address, 'ett långt lösenord');
+  await page.goto('/sv/print');
+  await page.locator('#file').setInputFiles({ name: 'tenta.pdf', mimeType: 'application/pdf', buffer: pdfWithPages(2) });
+  await expect(page.getByTestId('price-total')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Beställ och betala' }).click();
+  await page.getByRole('button', { name: 'Avbryt' }).click();
+
+  await expect(page.getByText('Du lämnade betalningen innan du betalade.')).toBeVisible();
+  await expect(page.getByText('Väntar på betalning', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Avbryt beställningen' }).click();
+  await expect(page.getByText('Avbruten', { exact: true })).toBeVisible();
 });

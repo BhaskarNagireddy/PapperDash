@@ -39,6 +39,12 @@ describe('loadConfig', () => {
     expect(loadConfig({ ...base, STRIPE_SECRET_KEY: 'rk_test_x' }).stripe).toBeNull();
   });
 
+  it('uses the test checkout only outside production and only without Stripe', () => {
+    expect(loadConfig(base).devPayments).toBe(true);
+    expect(loadConfig({ ...base, STRIPE_SECRET_KEY: 'rk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_x' }).devPayments).toBe(false);
+    expect(loadConfig(production).devPayments).toBe(false);
+  });
+
   it('rejects malformed secrets and station keys', () => {
     expect(() => loadConfig({ ...base, STRIPE_SECRET_KEY: 'pk_test_publishable' })).toThrow(/secret \(sk_\) or restricted \(rk_\)/);
     expect(() => loadConfig({ ...base, STATION_KEYS: '{"lund-1":"short"}' })).toThrow(/STATION_KEYS/);
@@ -58,6 +64,7 @@ describe('loadConfig', () => {
     ['email sender (else reset links would be logged)', { EMAIL_FROM: undefined }, /EMAIL_FROM/],
     ['https site', { PUBLIC_WEB_URL: 'http://www.papperdash.se' }, /https/],
     ['website origins for CORS', { CORS_ORIGINS: undefined }, /CORS_ORIGINS is required/],
+    ['Stripe when ordering is open', { ORDERING_ENABLED: 'true' }, /ORDERING_ENABLED needs STRIPE/],
     ['a CORS wildcard', { CORS_ORIGINS: '*' }, /exact https origins/],
     ['plain-http CORS origins', { CORS_ORIGINS: 'http://papperdash.se' }, /exact https origins/],
     ['CORS origins with a path', { CORS_ORIGINS: 'https://papperdash.se/app' }, /exact https origins/],
